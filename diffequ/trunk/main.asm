@@ -30,7 +30,7 @@
 ;Field: Date stamp - 5/12/1999
 	DB 003h,026h,009h,004h,004h,06fh,01bh,080h
 ;Dummy encrypted TI date stamp signature
-	DB 002h ,00dh ,040h                             
+	DB 002h ,00dh ,040h				  
 	DB 0a1h ,06bh ,099h ,0f6h ,059h ,0bch ,067h 
 	DB 0f5h ,085h ,09ch ,009h ,06ch ,00fh ,0b4h ,003h ,09bh ,0c9h 
 	DB 003h ,032h ,02ch ,0e0h ,003h ,020h ,0e3h ,02ch ,0f4h ,02dh 
@@ -40,10 +40,10 @@
 	DB 019h ,01ch ,03ch ,0ech ,04dh ,0e5h ,075h 
 ;Field: Program Image length
 	DB 80h,7Fh
-	DB 0,0,0,0    ;Length=0, N/A
-	DB 0,0,0,0    ;Reserved
-	DB 0,0,0,0    ;Reserved
-	DB 0,0,0,0    ;Reserved
+	DB 0,0,0,0 ;Length=0, N/A
+	DB 0,0,0,0 ;Reserved
+	DB 0,0,0,0 ;Reserved
+	DB 0,0,0,0 ;Reserved
 	DB 0,0,0,0	;Reserved
  list
 
@@ -53,6 +53,8 @@ StartApp:
 	in a,(6)
 	ld hl,parser_hook
 	B_CALL EnableParserHook
+
+	call create_appvar
 
 	B_JUMP JForceCmdNoChar
 
@@ -131,6 +133,13 @@ euler:
 	B_CALL RclSysTok
 	B_CALL OP1ExOP2
 	B_CALL FPDiv
+	ld hl,OP1
+	ld a,(hl)
+	and 80h
+	pop de
+	ld d,a;store sign next to equ nr
+	push de
+	res 7,(hl)
 	B_CALL ConvOP1
 	;DE=(X-X0)/Xstep -> aantal stappen
 	pop bc
@@ -147,7 +156,7 @@ euler:
 	pop bc
 	ld a,b
 	or c
-	jr z,euler_loop_end
+	jr z,euler_loop_skip
 	push bc
 	push de
 
@@ -159,7 +168,7 @@ euler_loop_start:
 	push de
 	push bc
 euler_loop2_start:;Estep loop
-	;FPS=FPS+Y*(X)*Xstep/Estep
+	;FPS=FPS(+-)Y*(X)*Xstep/Estep (forward or reverse euler)
 	pop de
 	push de
 	call euler_load_equation
@@ -174,10 +183,19 @@ euler_loop2_start:;Estep loop
 	call euler_load_estep
 	B_CALL OP1ExOP2
 	B_CALL FPDiv
-	B_CALL PopRealO2
+	rst rOP1TOOP2
+	B_CALL PopRealO1
+	pop af
+	push af
+	or a
+	jr z,euler_loop2_add1
+	B_CALL FPSub
+	jr euler_loop2_sub1
+euler_loop2_add1:
 	rst rFPADD
+euler_loop2_sub1:
 	rst rPUSHREALO1
-	;X=X+Xstep/Estep
+	;X=X(+-)Xstep/Estep (forward or reverse euler)
 	call euler_load_estep
 	rst rOP1TOOP2
 	ld a,Xstep
@@ -185,7 +203,15 @@ euler_loop2_start:;Estep loop
 	B_CALL FPDiv
 	rst rOP1TOOP2
 	B_CALL RclX
+	pop af
+	push af
+	or a
+	jr z,euler_loop2_add2
+	B_CALL FPSub
+	jr euler_loop2_sub2
+euler_loop2_add2:
 	rst rFPADD
+euler_loop2_sub2:
 	B_CALL StoX
 
 	pop de
@@ -206,9 +232,35 @@ euler_loop2_end:
 	push bc
 	push de
 	jr nz,euler_loop_start
+	;done final loop
+	;save calculated value in cache
+	call LookupAppVar
+	ex de,hl
+	ld de,2-18
+	add hl,de
+	ld de,18
 	pop bc
+	push bc
+	ld b,c
+	inc b
+$$:
+	add hl,de
+	djnz $b
+	push hl
+	B_CALL RclX
+	B_CALL CpyTo2FPST
 	pop de
-euler_loop_end:
+	ld hl,OP1
+	ld bc,9
+	ldir
+	ld bc,9
+	ld hl,OP2
+	ldir
+
+	pop de
+	pop bc
+euler_loop_skip:
+
 
 	;do final euler iteration here (OP1=FPS+Y*(X)*(X-Xend))
 	;OPTIMIZE: only use parseinp when not multiplied by zero
@@ -255,6 +307,58 @@ euler_load_yi0:
 euler_load_yi0_value:
 	db 0,80h,10h,0,0,0,0,0,0
 	
+create_appvar:
+	ld hl,AppvarName
+	rst rMOV9TOOP1
+	B_CALL ChkFindSym
+	jr nc,Exists
+	ld hl,AppvarInitSize
+	B_CALL CreateAppVar
+	inc de
+	inc de
+	ld hl,AppvarInit
+	ld bc,AppvarInitSize
+	ldir
+Exists:
+	ld a,b
+	or a
+	jr z,NotArchived
+	B_CALL Arc_Unarc
+NotArchived:
+	ret
+
+LookupAppVar:
+	ld	hl,AppvarName
+	rst	20h
+	B_CALL	ChkFindSym
+	ret	nc
+	B_JUMP	ErrUndefined
+
+AppvarName:
+	db AppVarObj,"Diffequ",0
+
+AppvarInit: ;contains cache
+	db 0,80h,0,0,0,0,0,0,0 ;x1
+	db 0,80h,0,0,0,0,0,0,0 ;y1(x1)
+
+	db 0,80h,0,0,0,0,0,0,0 ;x2
+	db 0,80h,0,0,0,0,0,0,0 ;y2(x2)
+	
+	db 0,80h,0,0,0,0,0,0,0 ;x3
+	db 0,80h,0,0,0,0,0,0,0 ;y3(x3)
+	
+	db 0,80h,0,0,0,0,0,0,0 ;x4
+	db 0,80h,0,0,0,0,0,0,0 ;y4(x4)
+	
+	db 0,80h,0,0,0,0,0,0,0 ;x5
+	db 0,80h,0,0,0,0,0,0,0 ;y5(x5)
+	
+	db 0,80h,0,0,0,0,0,0,0 ;x6
+	db 0,80h,0,0,0,0,0,0,0 ;y6(x6)	
+AppvarInit_end:
+
+AppvarInitSize equ AppvarInit_end - AppvarInit
+
 
 ;NOT IMPLEMENTED:function may contain y1(=real(34,0))
 ;NOT IMPLEMENTED:caching previous result for speedup
