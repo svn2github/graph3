@@ -253,6 +253,16 @@ euler_loop2_add2:
 	rst rFPADD
 euler_loop2_sub2:
 	B_CALL StoX
+
+	pop de
+	pop bc
+	dec bc
+	ld a,c
+	or b
+	push bc
+	push de
+	jr nz,euler_loop2_start
+	
 	;save calculated value in cache
 	pop de
 	push de
@@ -267,15 +277,6 @@ euler_loop2_sub2:
 	ld bc,9
 	ld hl,OP2
 	ldir
-
-	pop de
-	pop bc
-	dec bc
-	ld a,c
-	or b
-	push bc
-	push de
-	jr nz,euler_loop2_start
 
 	pop de
 	pop bc
