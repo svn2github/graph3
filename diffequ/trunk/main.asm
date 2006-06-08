@@ -122,13 +122,60 @@ Xstep equ TSTEPt
 euler:
 	push de
 	B_CALL RclX
-	rst rPUSHREALO1
+	rst rPUSHREALO1;save X
 	rst rOP1TOOP2
 	ld a,X0
 	B_CALL RclSysTok
 	B_CALL OP1ExOP2
 	B_CALL FPSub
+	rst rPUSHREALO1
+	;calculated X-X0
+	pop de
+	push de
+	call euler_lookup_cache
+	rst rMOV9TOOP1
 	rst rOP1TOOP2
+	B_CALL CpyTo1FPS1
+	B_CALL FPSub
+	rst rPUSHREALO1
+	;calculated Cache-X0
+	ld a,(OP1+2)
+	or a
+	jr z,euler_init_cache;result is in cache
+	B_CALL CpyTo2FPS1
+	call same_sign
+	jr nz,euler_init_X0;only going farther from X0 using cache
+	B_CALL FPSub
+	B_CALL CpyTo2FPST
+	call same_sign
+	jr z,euler_init_X0;X0 is closer
+	;use cache as startingpoint
+euler_init_cache:
+	;set (variable) X and FPST
+	pop de
+	push de
+	call euler_lookup_cache
+	rst rMOV9TOOP1
+	push hl
+	B_CALL StoX
+	B_CALL PopRealO2
+	B_CALL PopRealO1
+	pop hl
+	rst rMOV9TOOP1
+	rst rPUSHREALO1
+	jr euler_init_registers
+euler_init_X0:
+	;set (variable) X and FPST
+	ld a,X0
+	B_CALL RclSysTok
+	B_CALL StoX
+	pop de
+	push de
+	call euler_load_yi0
+	B_CALL PopRealO2
+	B_CALL PopRealO2
+	rst rPUSHREALO1
+euler_init_registers:;doesn't depend on X0/cache choice
 	ld a,Xstep
 	B_CALL RclSysTok
 	B_CALL OP1ExOP2
@@ -141,17 +188,10 @@ euler:
 	push de
 	res 7,(hl)
 	B_CALL ConvOP1
-	;DE=(X-X0)/Xstep -> aantal stappen
+	;DE=(X-?)/Xstep -> aantal stappen (?=X0 or ?=cache
 	pop bc
 	push de
 	push bc
-	ld a,X0
-	B_CALL RclSysTok
-	B_CALL StoX
-	pop de
-	push de
-	call euler_load_yi0
-	rst rPUSHREALO1
 	pop de
 	pop bc
 	ld a,b
@@ -222,30 +262,10 @@ euler_loop2_sub2:
 	push bc
 	push de
 	jr nz,euler_loop2_start
-	pop de
-	pop bc
-euler_loop2_end:
-	pop bc
-	dec bc
-	ld a,b
-	or c
-	push bc
-	push de
-	jr nz,euler_loop_start
-	;done final loop
 	;save calculated value in cache
-	call LookupAppVar
-	ex de,hl
-	ld de,2-18
-	add hl,de
-	ld de,18
-	pop bc
-	push bc
-	ld b,c
-	inc b
-$$:
-	add hl,de
-	djnz $b
+	pop de
+	push de
+	call euler_lookup_cache
 	push hl
 	B_CALL RclX
 	B_CALL CpyTo2FPST
@@ -259,29 +279,47 @@ $$:
 
 	pop de
 	pop bc
+euler_loop2_end:
+	pop bc
+	dec bc
+	ld a,b
+	or c
+	push bc
+	push de
+	jr nz,euler_loop_start
+	;done final loop
+	
+	pop de
+	pop bc
 euler_loop_skip:
-
-
-	;do final euler iteration here (OP1=FPS+Y*(X)*(X-Xend))
-	;OPTIMIZE: only use parseinp when not multiplied by zero
-	call euler_load_equation
-	B_CALL ParseInp
-	B_CALL CkOP1Real
-	jr nz,parser_hook_argument_error
-	B_CALL OP1ToOP3
+	push de
+	;check if final iteration is needed
 	B_CALL RclX
 	rst rOP1TOOP2
 	B_CALL CpyTo1FPS1
 	B_CALL FPSub
-	B_CALL OP3ToOP2
+	ld a,(OP1+2)
+	or a
+	jr z,euler_skip_final
+
+	rst rPUSHREALO1
+	pop de
+	call euler_load_equation
+	B_CALL ParseInp
+	B_CALL CkOP1Real
+	jr nz,parser_hook_argument_error
+	B_CALL PopRealO2
 	B_CALL FPMult
 	B_CALL PopRealO2
 	rst rFPADD
-	rst rOP1TOOP2
-	;
+	rst rPUSHREALO1
+
+euler_skip_final:
+	B_CALL PopRealO2
 	B_CALL PopRealO1
 	B_CALL StoX
 	B_CALL OP2ToOP1
+	pop de
 	ret
 
 euler_load_equation:
@@ -294,6 +332,21 @@ euler_load_equation:
 	ret
 euler_equ:
 	db EquObj, tVarEqu, tY7,0
+
+euler_lookup_cache:
+	push de
+	call LookupAppVar
+	ex de,hl
+	ld de,2-18
+	add hl,de
+	ld de,18
+	pop bc
+	ld b,c
+	inc b
+$$:
+	add hl,de
+	djnz $b
+	ret
 
 euler_load_estep:;FIX: use real estep value
 	ld a,XRESt
@@ -359,7 +412,11 @@ AppvarInit_end:
 
 AppvarInitSize equ AppvarInit_end - AppvarInit
 
+same_sign: ;Z if same change
+	ld a,(OP1)
+	ld hl,OP2
+	xor (hl)
+	and 80h
+	ret
 
-;NOT IMPLEMENTED:function may contain y1(=real(34,0))
-;NOT IMPLEMENTED:caching previous result for speedup
 ;NOT IMPLEMENTED:support Yi* parameter
