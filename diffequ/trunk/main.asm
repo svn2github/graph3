@@ -132,30 +132,45 @@ euler:
 	;calculated X-X0
 	;FIX: cache not always on a Xstep, can also be on a Estep
 	pop de
+	ld d,1
 	push de
-	call euler_lookup_cache
-	rst rMOV9TOOP1
-	rst rOP1TOOP2
-	B_CALL CpyTo1FPS1
-	B_CALL FPSub
+	call euler_check_cache
+	jr z,euler_init_check_cache;cache usefull
+	B_CALL PopRealO1 ;get rid of cache-X0
+	pop de
+	ld d,2*9+1
+	push de
+	call euler_check_cache
+	jr nz,euler_init_X0
+	jr euler_init_cache
+
+euler_init_check_cache:
+	B_CALL PopRealO1 ;get cache-X0
+	B_CALL PopRealO2 ;get X-X0
 	rst rPUSHREALO1
-	;calculated Cache-X0
-	ld a,(OP1+2)
-	or a
-	jr z,euler_init_cache;result is in cache
-	B_CALL CpyTo2FPS1
-	call same_sign
-	jr nz,euler_init_X0;only going farther from X0 using cache
-	B_CALL FPSub
-	B_CALL CpyTo2FPST
-	call same_sign
-	jr z,euler_init_X0;X0 is closer
+	pop de
+	ld d,2*9+1
+	push de
+	call euler_check_cache
+	jr z,euler_init_cache
+	pop de
+	ld d,1
+	push de
+	B_CALL PopRealO1
+	B_CALL PopRealO1
+	rst rPUSHREALO1
+	rst rPUSHREALO1;make the top of the stack the correct cache-X0 value
 	;use cache as startingpoint
 euler_init_cache:
 	;set (variable) X and FPST
 	pop de
 	push de
 	call euler_lookup_cache
+	pop de
+	push de
+	ld e,d
+	ld d,0
+	add hl,de
 	rst rMOV9TOOP1
 	push hl
 	B_CALL StoX
@@ -259,6 +274,20 @@ euler_loop2_sub2:
 	pop de
 	push de
 	call euler_lookup_cache
+	ld a,(hl)
+	xor cacheSwitchMask
+	bit cacheSwitchBit,a
+	jr z,euler_loop2_cache1
+	or cache2ValidMask
+	ld (hl),a
+	ld de,2*9+1
+	add hl,de;skip first cache
+	jr euler_loop2_cache2
+euler_loop2_cache1:
+	or cache1ValidMask
+	ld (hl),a
+	inc hl
+euler_loop2_cache2:
 	push hl
 	B_CALL RclX
 	B_CALL CpyTo2FPST
@@ -322,6 +351,7 @@ euler_skip_final:
 	B_CALL StoX
 	B_CALL OP2ToOP1
 	pop de
+	or 0FFh
 	ret
 
 euler_load_equation:
@@ -336,18 +366,58 @@ euler_equ:
 	db EquObj, tVarEqu, tY7,0
 
 euler_lookup_cache:
+;E contains equation number
 	push de
 	call LookupAppVar
 	ex de,hl
-	ld de,2-18
+	ld de,2-(18*2+1)
 	add hl,de
-	ld de,18
+	ld de,9*4+1
 	pop bc
 	ld b,c
 	inc b
 $$:
 	add hl,de
 	djnz $b
+	ret
+
+euler_check_cache:;checks whether using the cache is usefull
+	;E contains equ number
+	;D contains nr of bytes to skip 1=first cache , 19=2nd cache
+	push de
+	call euler_lookup_cache
+	pop de
+	ld a,d
+	dec a
+	ld a,(hl)
+	jr z,$f
+	rra ;shift cache 2 bit to place of cache 1
+$$:
+	and cache1ValidMask
+	xor cache1ValidMask
+	push af;save for after push on FPS
+	ld e,d
+	ld d,0
+	add hl,de
+	rst rMOV9TOOP1
+	rst rOP1TOOP2
+	B_CALL CpyTo1FPS1;X0
+	B_CALL FPSub
+	rst rPUSHREALO1
+	pop af
+	ret nz;cache was not valid
+	;calculated Cache-X0
+	ld a,(OP1+2)
+	or a
+	ret z;result is in cache
+	B_CALL CpyTo2FPS1
+	call same_sign
+	ret nz;only going farther from X0 using cache
+	B_CALL FPSub
+	B_CALL CpyTo2FPST
+	call same_sign
+	xor 80h
+	;NZ if X0 is closer
 	ret
 
 euler_load_estep:;FIX: use real estep value
@@ -393,28 +463,56 @@ AppvarName:
 	db AppVarObj,"Diffequ",0
 
 AppvarInit: ;contains cache
-	db 0,80h,0,0,0,0,0,0,0 ;x1
-	db 0,80h,0,0,0,0,0,0,0 ;y1(x1)
 
-	db 0,80h,0,0,0,0,0,0,0 ;x2
-	db 0,80h,0,0,0,0,0,0,0 ;y2(x2)
+	db 0
+	db 0,80h,0,0,0,0,0,0,0 ;1;x1
+	db 0,80h,0,0,0,0,0,0,0 ;1;y1(x1)
+	db 0,80h,0,0,0,0,0,0,0 ;2;x1
+	db 0,80h,0,0,0,0,0,0,0 ;2;y1(x1)
+
+	db 0
+	db 0,80h,0,0,0,0,0,0,0 ;1;x2
+	db 0,80h,0,0,0,0,0,0,0 ;1;y2(x2)
+	db 0,80h,0,0,0,0,0,0,0 ;2;x2
+	db 0,80h,0,0,0,0,0,0,0 ;2;y2(x2)
 	
-	db 0,80h,0,0,0,0,0,0,0 ;x3
-	db 0,80h,0,0,0,0,0,0,0 ;y3(x3)
+	db 0
+	db 0,80h,0,0,0,0,0,0,0 ;1;x3
+	db 0,80h,0,0,0,0,0,0,0 ;1;y3(x3)
+	db 0,80h,0,0,0,0,0,0,0 ;2;x3
+	db 0,80h,0,0,0,0,0,0,0 ;2;y3(x3)
 	
-	db 0,80h,0,0,0,0,0,0,0 ;x4
-	db 0,80h,0,0,0,0,0,0,0 ;y4(x4)
+	db 0
+	db 0,80h,0,0,0,0,0,0,0 ;1;x4
+	db 0,80h,0,0,0,0,0,0,0 ;1;y4(x4)
+	db 0,80h,0,0,0,0,0,0,0 ;2;x4
+	db 0,80h,0,0,0,0,0,0,0 ;2;y4(x4)
 	
-	db 0,80h,0,0,0,0,0,0,0 ;x5
-	db 0,80h,0,0,0,0,0,0,0 ;y5(x5)
+	db 0
+	db 0,80h,0,0,0,0,0,0,0 ;1;x5
+	db 0,80h,0,0,0,0,0,0,0 ;1;y5(x5)
+	db 0,80h,0,0,0,0,0,0,0 ;2;x5
+	db 0,80h,0,0,0,0,0,0,0 ;2;y5(x5)
 	
-	db 0,80h,0,0,0,0,0,0,0 ;x6
-	db 0,80h,0,0,0,0,0,0,0 ;y6(x6)	
+	db 0
+	db 0,80h,0,0,0,0,0,0,0 ;1;x6
+	db 0,80h,0,0,0,0,0,0,0 ;1;y6(x6)
+	db 0,80h,0,0,0,0,0,0,0 ;2;x6
+	db 0,80h,0,0,0,0,0,0,0 ;2;y6(x6)
 AppvarInit_end:
 
 AppvarInitSize equ AppvarInit_end - AppvarInit
 
-same_sign: ;Z if same change
+cacheSwitchBit		equ 0
+cache1ValidBit		equ 1
+cache2ValidBit		equ 2
+
+cacheSwitchMask	equ 1<<cacheSwitchBit
+cache1ValidMask	equ 1<<cache1ValidBit
+cache2ValidMask	equ 1<<cache2ValidBit
+
+
+same_sign: ;Z if same sign
 	ld a,(OP1)
 	ld hl,OP2
 	xor (hl)
@@ -422,3 +520,4 @@ same_sign: ;Z if same change
 	ret
 
 ;NOT IMPLEMENTED:support Yi* parameter
+;NOT IMPLEMENTED:disallow y1(..) calls inside ODE's
