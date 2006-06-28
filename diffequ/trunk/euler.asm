@@ -3,7 +3,6 @@
 ;X0		<-> Tmin
 ;Xmax		<-> Tmax
 ;Xstep	<-> Tstep
-;Estep	<-> -			(new variable, equals Xres now) 
 ;y*		<-> y*		(y7..y0 now for 1..4)
 ;yi*		<-> -			(new variable, equals 1 now)
 
@@ -109,13 +108,7 @@ euler_init_registers:;doesn't depend on X0/cache choice
 
 
 euler_loop_start:
-	call euler_load_estep
-	B_CALL ConvOP1
-	pop bc
-	push de
-	push bc
-euler_loop2_start:;Estep loop
-	;FPS=FPS(+-)Y*(X)*Xstep/Estep (forward or reverse euler)
+	;FPS=FPS(+-)Y*(X)*Xstep (forward or reverse euler)
 	pop de
 	push de
 	call euler_load_equation
@@ -127,38 +120,31 @@ euler_loop2_start:;Estep loop
 	B_CALL RclSysTok
 	B_CALL FPMult
 	rst rOP1TOOP2
-	call euler_load_estep
-	B_CALL OP1ExOP2
-	B_CALL FPDiv
-	rst rOP1TOOP2
 	B_CALL PopRealO1
 	pop af
 	push af
 	or a
-	jr z,euler_loop2_add1
+	jr z,euler_loop_add1
 	B_CALL FPSub
-	jr euler_loop2_sub1
-euler_loop2_add1:
+	jr euler_loop_sub1
+euler_loop_add1:
 	rst rFPADD
-euler_loop2_sub1:
+euler_loop_sub1:
 	rst rPUSHREALO1
-	;X=X(+-)Xstep/Estep (forward or reverse euler)
-	call euler_load_estep
-	rst rOP1TOOP2
+	;X=X(+-)Xstep (forward or reverse euler)
 	ld a,Xstep
 	B_CALL RclSysTok
-	B_CALL FPDiv
 	rst rOP1TOOP2
 	B_CALL RclX
 	pop af
 	push af
 	or a
-	jr z,euler_loop2_add2
+	jr z,euler_loop_add2
 	B_CALL FPSub
-	jr euler_loop2_sub2
-euler_loop2_add2:
+	jr euler_loop_sub2
+euler_loop_add2:
 	rst rFPADD
-euler_loop2_sub2:
+euler_loop_sub2:
 	B_CALL StoX
 
 	;save calculated value in cache
@@ -168,17 +154,17 @@ euler_loop2_sub2:
 	ld a,(hl)
 	xor cacheSwitchMask
 	bit cacheSwitchBit,a
-	jr z,euler_loop2_cache1
+	jr z,euler_loop_cache1
 	or cache2ValidMask
 	ld (hl),a
 	ld de,2*9+1
 	add hl,de;skip first cache
-	jr euler_loop2_cache2
-euler_loop2_cache1:
+	jr euler_loop_cache2
+euler_loop_cache1:
 	or cache1ValidMask
 	ld (hl),a
 	inc hl
-euler_loop2_cache2:
+euler_loop_cache2:
 	push hl
 	B_CALL RclX
 	B_CALL CpyTo2FPST
@@ -191,17 +177,6 @@ euler_loop2_cache2:
 	ldir
 
 	pop de
-	pop bc
-	dec bc
-	ld a,c
-	or b
-	push bc
-	push de
-	jr nz,euler_loop2_start
-
-	pop de
-	pop bc
-euler_loop2_end:
 	pop bc
 	dec bc
 	ld a,b
@@ -309,11 +284,6 @@ $$:
 	call same_sign
 	xor 80h
 	;NZ if X0 is closer
-	ret
-
-euler_load_estep:;FIX: use real estep value
-	ld a,XRESt
-	B_CALL RclSysTok
 	ret
 
 euler_load_yi0:
