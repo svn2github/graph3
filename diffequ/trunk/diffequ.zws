@@ -45,6 +45,8 @@ SOURCE = main.asm
 [DEPENDENCIES]
 #begin
 DEP = e:\soc ti83+\ti83plus.inc
+DEP = euler.asm
+DEP = runge-kutta.asm
 #end
 
 [C SETTINGS]

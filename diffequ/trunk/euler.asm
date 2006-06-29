@@ -6,9 +6,6 @@
 ;y*		<-> y*		(y7..y0 now for 1..4)
 ;yi*		<-> -			(new variable, equals 1 now)
 
-X0 equ TMINt
-Xstep equ TSTEPt
-
 euler:
 	push de
 	B_CALL RclX
@@ -55,7 +52,7 @@ euler_init_cache:
 	;set (variable) X and FPST
 	pop de
 	push de
-	call euler_lookup_cache
+	call lookup_cache
 	pop de
 	push de
 	ld e,d
@@ -77,7 +74,7 @@ euler_init_X0:
 	B_CALL StoX
 	pop de
 	push de
-	call euler_load_yi0
+	call load_yi0
 	B_CALL PopRealO2
 	B_CALL PopRealO2
 	rst rPUSHREALO1
@@ -111,7 +108,7 @@ euler_loop_start:
 	;FPS=FPS(+-)Y*(X)*Xstep (forward or reverse euler)
 	pop de
 	push de
-	call euler_load_equation
+	call load_equation
 	B_CALL ParseInp
 	B_CALL CkOP1Real
 	jr nz,parser_hook_argument_error
@@ -150,7 +147,7 @@ euler_loop_sub2:
 	;save calculated value in cache
 	pop de
 	push de
-	call euler_lookup_cache
+	call lookup_cache
 	ld a,(hl)
 	xor cacheSwitchMask
 	bit cacheSwitchBit,a
@@ -201,7 +198,8 @@ euler_loop_skip:
 
 	rst rPUSHREALO1
 	pop de
-	call euler_load_equation
+	push de
+	call load_equation
 	B_CALL ParseInp
 	B_CALL CkOP1Real
 	jr nz,parser_hook_argument_error
@@ -217,41 +215,13 @@ euler_skip_final:
 	B_CALL StoX
 	B_CALL OP2ToOP1
 	pop de
-	or 0FFh
-	ret
-
-euler_load_equation:
-	ld a,e
-	ld hl,euler_equ
-	rst rMOV9TOOP1
-	ld hl,OP1+2
-	add (hl)
-	ld (hl),a
-	ret
-euler_equ:
-	db EquObj, tVarEqu, tY7,0
-
-euler_lookup_cache:
-;E contains equation number
-	push de
-	call LookupAppVar
-	ex de,hl
-	ld de,2-(18*2+1)
-	add hl,de
-	ld de,9*4+1
-	pop bc
-	ld b,c
-	inc b
-$$:
-	add hl,de
-	djnz $b
 	ret
 
 euler_check_cache:;checks whether using the cache is usefull
 	;E contains equ number
 	;D contains nr of bytes to skip 1=first cache , 19=2nd cache
 	push de
-	call euler_lookup_cache
+	call lookup_cache
 	pop de
 	ld a,d
 	dec a
@@ -285,10 +255,3 @@ $$:
 	xor 80h
 	;NZ if X0 is closer
 	ret
-
-euler_load_yi0:
-	ld hl,euler_load_yi0_value
-	rst rMOV9TOOP1
-	ret
-euler_load_yi0_value:
-	db 0,80h,10h,0,0,0,0,0,0

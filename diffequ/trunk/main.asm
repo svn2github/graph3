@@ -103,7 +103,13 @@ parser_hook_real:
 	pop de
 	jr nz,parser_hook_argument_error
 	;all checks passed, E contains equation number
-	call euler
+	push de
+	call runge
+	pop de
+	;call euler
+	nop
+	nop
+	nop
 	or 0FFh
 	ret
 	
@@ -116,9 +122,9 @@ create_appvar:
 	B_CALL CreateAppVar
 	inc de
 	inc de
-	ld hl,AppvarInit
+	ex de,hl
 	ld bc,AppvarInitSize
-	ldir
+	B_CALL MemClear
 Exists:
 	ld a,b
 	or a
@@ -137,46 +143,11 @@ LookupAppVar:
 AppvarName:
 	db AppVarObj,"Diffequ",0
 
-AppvarInit: ;contains cache
-
-	db 0
-	db 0,80h,0,0,0,0,0,0,0 ;1;x1
-	db 0,80h,0,0,0,0,0,0,0 ;1;y1(x1)
-	db 0,80h,0,0,0,0,0,0,0 ;2;x1
-	db 0,80h,0,0,0,0,0,0,0 ;2;y1(x1)
-
-	db 0
-	db 0,80h,0,0,0,0,0,0,0 ;1;x2
-	db 0,80h,0,0,0,0,0,0,0 ;1;y2(x2)
-	db 0,80h,0,0,0,0,0,0,0 ;2;x2
-	db 0,80h,0,0,0,0,0,0,0 ;2;y2(x2)
-	
-	db 0
-	db 0,80h,0,0,0,0,0,0,0 ;1;x3
-	db 0,80h,0,0,0,0,0,0,0 ;1;y3(x3)
-	db 0,80h,0,0,0,0,0,0,0 ;2;x3
-	db 0,80h,0,0,0,0,0,0,0 ;2;y3(x3)
-	
-	db 0
-	db 0,80h,0,0,0,0,0,0,0 ;1;x4
-	db 0,80h,0,0,0,0,0,0,0 ;1;y4(x4)
-	db 0,80h,0,0,0,0,0,0,0 ;2;x4
-	db 0,80h,0,0,0,0,0,0,0 ;2;y4(x4)
-	
-	db 0
-	db 0,80h,0,0,0,0,0,0,0 ;1;x5
-	db 0,80h,0,0,0,0,0,0,0 ;1;y5(x5)
-	db 0,80h,0,0,0,0,0,0,0 ;2;x5
-	db 0,80h,0,0,0,0,0,0,0 ;2;y5(x5)
-	
-	db 0
-	db 0,80h,0,0,0,0,0,0,0 ;1;x6
-	db 0,80h,0,0,0,0,0,0,0 ;1;y6(x6)
-	db 0,80h,0,0,0,0,0,0,0 ;2;x6
-	db 0,80h,0,0,0,0,0,0,0 ;2;y6(x6)
-AppvarInit_end:
-
-AppvarInitSize equ AppvarInit_end - AppvarInit
+;	db 0 status bits
+;	db 0,0,0,0,0,0,0,0,0 ;1;x1
+;	db 0,0,0,0,0,0,0,0,0 ;1;y1(x1)
+;	db 0,0,0,0,0,0,0,0,0 ;2;x1
+;	db 0,0,0,0,0,0,0,0,0 ;2;y1(x1)
 
 cacheSwitchBit		equ 0
 cache1ValidBit		equ 1
@@ -185,7 +156,8 @@ cache2ValidBit		equ 2
 cacheSwitchMask	equ 1<<cacheSwitchBit
 cache1ValidMask	equ 1<<cache1ValidBit
 cache2ValidMask	equ 1<<cache2ValidBit
-
+cache_size_per_equ equ 9*4+1
+AppvarInitSize equ cache_size_per_equ*6
 
 same_sign: ;Z if same sign of OP1 and OP2
 	ld a,(OP1)
@@ -194,6 +166,45 @@ same_sign: ;Z if same sign of OP1 and OP2
 	and 80h
 	ret
 
+load_yi0:
+	ld hl,load_yi0_value
+	rst rMOV9TOOP1
+	ret
+load_yi0_value:
+	db 0,80h,10h,0,0,0,0,0,0
+
+load_equation:
+	ld a,e
+	ld hl,equation
+	rst rMOV9TOOP1
+	ld hl,OP1+2
+	add (hl)
+	ld (hl),a
+	ret
+equation:
+	db EquObj, tVarEqu, tY7,0
+
+lookup_cache:
+;E contains equation number
+	push de
+	call LookupAppVar
+	ex de,hl
+	ld de,2-(cache_size_per_equ)
+	add hl,de
+	ld de,cache_size_per_equ
+	pop bc
+	ld b,c
+	inc b
+$$:
+	add hl,de
+	djnz $b
+	ret
+
+X0 equ TMINt
+Xstep equ TSTEPt
+
 	include "euler.asm"
+	include "runge-kutta.asm"
+
 ;NOT IMPLEMENTED:support Yi* parameter
 ;NOT IMPLEMENTED:disallow y1(..) calls inside ODE's
