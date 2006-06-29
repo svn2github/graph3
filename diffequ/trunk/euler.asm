@@ -17,7 +17,6 @@ euler:
 	B_CALL FPSub
 	rst rPUSHREALO1
 	;calculated X-X0
-	;FIX: cache not always on a Xstep, can also be on a Estep
 	pop de
 	ld d,1
 	push de

@@ -149,13 +149,15 @@ AppvarName:
 ;	db 0,0,0,0,0,0,0,0,0 ;2;x1
 ;	db 0,0,0,0,0,0,0,0,0 ;2;y1(x1)
 
-cacheSwitchBit		equ 0
-cache1ValidBit		equ 1
-cache2ValidBit		equ 2
+cacheSwitchBit					equ 0
+cache1ValidBit					equ 1
+cache2ValidBit					equ 2
+cacheRungeSimpleValidBit	equ 7
 
-cacheSwitchMask	equ 1<<cacheSwitchBit
-cache1ValidMask	equ 1<<cache1ValidBit
-cache2ValidMask	equ 1<<cache2ValidBit
+cacheSwitchMask				equ 1<<cacheSwitchBit
+cache1ValidMask				equ 1<<cache1ValidBit
+cache2ValidMask				equ 1<<cache2ValidBit
+cacheRungeSimpleValidMask	equ 1<<cacheRungeSimpleValidBit
 cache_size_per_equ equ 9*4+1
 AppvarInitSize equ cache_size_per_equ*6
 

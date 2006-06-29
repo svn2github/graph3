@@ -5,7 +5,7 @@ runge:
 	pop de
 	push de
 	call lookup_cache
-	bit 7,(hl)
+	bit cacheRungeSimpleValidBit,(hl)
 	jr z,$f
 	inc hl
 	push hl
@@ -17,8 +17,10 @@ runge:
 	jr nz,$f
 	ld de,9
 	add hl,de
-	rst rMOV9TOOP1
-	rst rOP1TOOP2
+	ld bc,9
+	ld de,OP6
+	ldir
+	pop de
 	jr runge_return_cache
 $$:
 	B_CALL CpyTo2FPST
@@ -38,6 +40,9 @@ $$:
 	B_CALL StoX ;starting point
 	ld a,Xstep
 	B_CALL RclSysTok
+	pop af
+	push af
+	ld (OP1),a
 	rst rPUSHREALO1;stepsize
 	call load_yi0
 	rst rPUSHREALO1 
@@ -55,7 +60,7 @@ $$:
 
 	pop de
 	push de
-	call runge_execute_equ ;FPS=[f1,Y,step,X,...]
+	call runge_execute_equ ;FPS=[f1,Y,step,X,X_target,...]
 
 	pop de
 	push de
@@ -64,7 +69,7 @@ $$:
 
 	pop de
 	push de
-	call runge_execute_equ ;FPS=[f2,f1,Y,step,X,...]
+	call runge_execute_equ ;FPS=[f2,f1,Y,step,X,X_target,...]
 
 	pop de
 	push de
@@ -73,7 +78,7 @@ $$:
 
 	pop de
 	push de
-	call runge_execute_equ ;FPS=[f3,f2,f1,Y,step,X,...]
+	call runge_execute_equ ;FPS=[f3,f2,f1,Y,step,X,X_target,...]
 
 	ld hl,runge_f1_inc
 	rst rMOV9TOOP1
@@ -93,7 +98,7 @@ $$:
 	B_CALL FPMult
 	B_CALL CpyTo2FPS3 ;Y
 	rst rFPADD ;Y+h(2/9*f1+1/3*f2+4/9*f3)
-	rst rPUSHREALO1 ;FPS=[Yn+1,f3,f2,f1,Y,step,X,...]
+	rst rPUSHREALO1 ;FPS=[Yn+1,f3,f2,f1,Y,step,X,X_target,...]
 	B_CALL OP1ToOP6
 
 	B_CALL CpyTo2FPS5 ;step
@@ -108,29 +113,53 @@ $$:
 
 	pop de
 	push de
-	call runge_execute_equ ;FPS=[f4,Yn+1,f3,f2,f1,Y,step,X,...]
+	call runge_execute_equ ;FPS=[f4,Yn+1,f3,f2,f1,Y,step,X,X_target,...]
 
-	B_CALL PopRealO2
+	B_CALL PopRealO2 ;f4
+	B_CALL OP2ToOP5
 	B_CALL PopRealO6 ;save Yn+1
-	ld hl,
+	ld hl,runge_f4_err
+	rst rMOV9TOOP1
+	B_CALL FPMult
+	B_CALL OP1ToOP4	
+
+	ld hl,runge_f3_err
+	call runge_mult_add_pop
+	B_CALL OP1ToOP4
+
+	ld hl,runge_f2_err
+	call runge_mult_add_pop
+	B_CALL OP1ToOP4
+
+	ld hl,runge_f1_err
+	call runge_mult_add_pop
+	B_CALL CpyTo2FPS1 ;step
+	B_CALL FPMult
+	;OP1=h(5/72*f1-1/12*f2-1/9*f3+1/8*f4)  the error estimate
+
+	;OP5=f4 (for FSAL implementation)
+	;OP6=Yn+1
+	;FPS=[Y,step,X,X_target,...]
 
 	;end RK
-	;FIX:invalidate cache after RK is finished
-	B_CALL PopRealO1
-	B_CALL PopRealO1
-	B_CALL PopRealO1
-	B_CALL PopRealO1
-	B_CALL PopRealO1
+	;invalidate cache after RK is finished
+	pop de
+	call lookup_cache
+	res cacheRungeSimpleValidBit,(hl)
+
 	B_CALL PopRealO1
 	B_CALL PopRealO1
 	B_CALL PopRealO1
 runge_return_cache:
 	B_CALL PopRealO1
 	B_CALL StoX
-	B_CALL OP2ToOP1
-	pop de
+	B_CALL OP6ToOP1
 	ret
 
+runge_mult_add_pop:
+	push hl
+	B_CALL PopRealO2
+	pop hl
 runge_mult_add:
 	rst rMOV9TOOP1
 	B_CALL FPMult
@@ -150,23 +179,18 @@ runge_execute_equ:
 
 runge_update_x_y:
 	;IX=[Y,step,X]
-	push af
 	push de
+	push af
+
 	push ix
 	pop hl
 	ld de,-9
 	add hl,de
 	rst rMOV9TOOP1
 	B_CALL ZeroOP2
-	pop de
-	pop af
-	push de
-	ld hl,OP2
-	ld (hl),d
-	inc hl
-	ld (hl),7Fh
-	inc hl
-	ld (hl),a
+	pop hl
+	ld l,7Fh
+	ld (OP2+1),hl
 	;OP2=a*0.1
 	B_CALL FPMult;h*a*0.1
 	B_CALL OP1ToOP3
@@ -195,7 +219,7 @@ runge_update_x_y:
 runge_save_y_cache:;OP6=y, OP5=x, E=equation number
 	call lookup_cache
 	;FIX:use proper equates
-	ld a,80h 
+	ld a,cacheRungeSimpleValidMask
 	or (hl)
 	ld (hl),a
 	inc hl
