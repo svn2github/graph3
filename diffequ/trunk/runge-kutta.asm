@@ -6,7 +6,7 @@ runge:
 	push de
 	call lookup_cache
 	bit cacheRungeSimpleValidBit,(hl)
-	jr z,$f
+	jr z,runge_skip_simple_cache
 	inc hl
 	push hl
 	B_CALL CpyTo1FPST
@@ -14,15 +14,14 @@ runge:
 	push hl
 	B_CALL Mov9OP2Cp
 	pop hl
-	jr nz,$f
+	jr nz,runge_skip_simple_cache
 	ld de,9
 	add hl,de
-	ld bc,9
-	ld de,OP6
-	ldir
+	rst rMOV9TOOP1
+	rst rOP1TOOP2
 	pop de
 	jr runge_return_cache
-$$:
+runge_skip_simple_cache:
 	B_CALL CpyTo2FPST
 	ld a,X0
 	B_CALL RclSysTok
@@ -47,12 +46,13 @@ $$:
 	call load_yi0
 	rst rPUSHREALO1 
 	B_CALL OP1ToOP6
-	;start RK
 	ld hl,(fps)
 	ld de,-9
 	add hl,de
 	push hl
 	pop ix
+runge_loop_start:
+	;start RK
 	;FPS=[Y,step,X,X_target,...] 
 	pop de
 	push de
@@ -62,6 +62,7 @@ $$:
 	push de
 	call runge_execute_equ ;FPS=[f1,Y,step,X,X_target,...]
 
+runge_loop_f1_known:
 	pop de
 	push de
 	ld a,50h
@@ -135,12 +136,87 @@ $$:
 	call runge_mult_add_pop
 	B_CALL CpyTo2FPS1 ;step
 	B_CALL FPMult
-	;OP1=h(5/72*f1-1/12*f2-1/9*f3+1/8*f4)  the error estimate
-
-	;OP5=f4 (for FSAL implementation)
-	;OP6=Yn+1
-	;FPS=[Y,step,X,X_target,...]
-
+	xor a
+	ld (OP1),a;abs
+	;OP1=abs(h(5/72*f1-1/12*f2-1/9*f3+1/8*f4))  the error estimate
+	B_CALL PushRealO6 ;Yn+1
+	B_CALL PushRealO5 ;f4 (for FSAL)
+	rst rPUSHREALO1
+	;FPS=[errest,f4,Yn+1,Y,step,X,X_target,...]
+	ld a,(OP1M)
+	or a
+	jr nz,runge_guess_formula
+	;zero error, double stepsize
+	B_CALL CpyTo1FPS4
+	ld hl,20h*256+80h;2
+	call runge_load_OP2
+	B_CALL FPMult
+	jr runge_guess_skip
+runge_guess_formula:
+	rst rOP1TOOP2
+	call runge_load_tolerance
+	B_CALL FPDiv
+	ld hl,25h*256+7Fh;.25
+	call runge_load_OP2
+	B_CALL YToX
+	ld hl,90h*256+7Fh;.9
+	call runge_load_OP2
+	B_CALL FPMult
+	B_CALL CpyTo2FPS4;h
+	B_CALL FPMult
+	;.9*h*(tol/abs(errest))^(1/4)
+runge_guess_skip:
+	B_CALL PopRealO2
+	rst rPUSHREALO1;FPS=[step_guess,f4,Yn+1,Y,step,X,X_target,...]
+	;OP2=errest
+	
+	call runge_load_tolerance
+	B_CALL CpOP1OP2
+	push af
+	ld hl,20h*256+80h;2
+	jr nc,runge_errest_skip
+	ld hl,50h*256+7Fh;.5
+runge_errest_skip:
+	call runge_load_OP2
+	B_CALL CpyTo1FPS4 ;step
+	B_CALL FPMult
+	B_CALL PopRealO2;step_guess
+	xor a
+	ld (OP1),a;absolute values
+	ld (OP2),a
+	B_CALL Min
+	;min(.5h,guess) or min(2h,guess)
+	pop af
+	jr c,runge_retry;error too big,retry step
+	;step succeeded
+	;FPS=[f4,Yn+1,Y,step,X,X_target,...]
+	B_CALL CpyTo2FPS3 ;step
+	pop af
+	push af
+	ld (OP1),a
+	B_CALL CpyO1ToFPS3 ;update step
+	B_CALL CpyTo1FPS4 ;X
+	rst rFPADD
+	B_CALL CpyO1ToFPS4 ;update X
+	B_CALL CpyTo2FPS5 ;X_target
+	pop af
+	push af
+	or a
+	jr z,$f
+	B_CALL OP1ExOP2 ;correct for negative stepsize
+$$:
+	B_CALL CpOP1OP2
+	push af
+	B_CALL PopRealO1;f4
+	B_CALL PopRealO2;Yn+1
+	B_CALL PopRealO3;Y
+	B_CALL PushRealO2
+	rst rPUSHREALO1
+	;FPS=[f4,Yn+1,step_next,X+step,X_target,...]
+	pop af
+	jr z,runge_exit_loop;X+step=X_target
+	jr c,runge_loop_f1_known;X+step<X_target
+runge_exit_loop:	
 	;end RK
 	;invalidate cache after RK is finished
 	pop de
@@ -148,13 +224,31 @@ $$:
 	res cacheRungeSimpleValidBit,(hl)
 
 	B_CALL PopRealO1
+	B_CALL PopRealO2;Yn+1
 	B_CALL PopRealO1
 	B_CALL PopRealO1
 runge_return_cache:
 	B_CALL PopRealO1
 	B_CALL StoX
-	B_CALL OP6ToOP1
+	B_CALL OP2ToOP1
 	ret
+
+runge_retry:
+	;FPS=[f4,Yn+1,Y,step,X,X_target,...]
+	B_CALL PopRealO2
+	B_CALL PopRealO2
+	pop af
+	push af
+	ld (OP1),a
+	B_CALL CpyO1ToFPS1
+	;FPS=[Y,step_updated,X,X_target,...]
+	;update X
+	B_CALL CpyTo1FPS2
+	B_CALL OP1ToOP5
+	B_CALL StoX
+	;update Y
+	B_CALL CpyTo6FPST
+	jr runge_loop_start
 
 runge_mult_add_pop:
 	push hl
@@ -187,10 +281,9 @@ runge_update_x_y:
 	ld de,-9
 	add hl,de
 	rst rMOV9TOOP1
-	B_CALL ZeroOP2
 	pop hl
 	ld l,7Fh
-	ld (OP2+1),hl
+	call runge_load_OP2
 	;OP2=a*0.1
 	B_CALL FPMult;h*a*0.1
 	B_CALL OP1ToOP3
@@ -231,6 +324,20 @@ runge_save_y_cache:;OP6=y, OP5=x, E=equation number
 	ld hl,OP6
 	ldir
 	ret
+
+runge_load_OP2:;hl=M*256+E
+	push hl
+	B_CALL ZeroOP2
+	pop hl
+	ld (OP2+1),hl
+	ret
+
+runge_load_tolerance:
+	ld hl,runge_load_tolerance_value
+	rst rMOV9TOOP1
+	ret
+runge_load_tolerance_value:
+	db 00h,80h,10h,00h,00h,00h,00h,00h,00h
 
 runge_f1_inc: ;2/9 in floating point
 	db 00h,7Fh,22h,22h,22h,22h,22h,22h,22h
