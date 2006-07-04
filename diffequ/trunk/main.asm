@@ -186,21 +186,6 @@ load_equation:
 equation:
 	db EquObj, tVarEqu, tY7,0
 
-lookup_cache:
-;E contains equation number
-	push de
-	call LookupAppVar
-	ex de,hl
-	ld de,2-(cache_size_per_equ)
-	add hl,de
-	ld de,cache_size_per_equ
-	pop bc
-	ld b,c
-	inc b
-$$:
-	add hl,de
-	djnz $b
-	ret
 
 X0 equ TMINt
 Xstep equ TSTEPt

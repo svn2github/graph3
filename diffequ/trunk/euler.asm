@@ -51,7 +51,7 @@ euler_init_cache:
 	;set (variable) X and FPST
 	pop de
 	push de
-	call lookup_cache
+	call euler_lookup_cache
 	pop de
 	push de
 	ld e,d
@@ -146,7 +146,7 @@ euler_loop_sub2:
 	;save calculated value in cache
 	pop de
 	push de
-	call lookup_cache
+	call euler_lookup_cache
 	ld a,(hl)
 	xor cacheSwitchMask
 	bit cacheSwitchBit,a
@@ -220,7 +220,7 @@ euler_check_cache:;checks whether using the cache is usefull
 	;E contains equ number
 	;D contains nr of bytes to skip 1=first cache , 19=2nd cache
 	push de
-	call lookup_cache
+	call euler_lookup_cache
 	pop de
 	ld a,d
 	dec a
@@ -253,4 +253,20 @@ $$:
 	call same_sign
 	xor 80h
 	;NZ if X0 is closer
+	ret
+
+euler_lookup_cache:
+;E contains equation number
+	push de
+	call LookupAppVar
+	ex de,hl
+	ld de,2-(cache_size_per_equ)
+	add hl,de
+	ld de,cache_size_per_equ
+	pop bc
+	ld b,c
+	inc b
+$$:
+	add hl,de
+	djnz $b
 	ret
