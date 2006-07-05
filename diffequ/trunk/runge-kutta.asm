@@ -1,10 +1,8 @@
 runge:
-	ld d,2
+	ld d,2+1
 	push de
 	B_CALL RclX
 	rst rPUSHREALO1;save X
-	pop de
-	push de
 	call runge_lookup_simple_cache
 	bit cacheRungeSimpleValidBit,(hl)
 	jr z,runge_skip_simple_cache
@@ -37,7 +35,7 @@ runge_skip_simple_cache:
 	ld a,X0
 	B_CALL RclSysTok
 	rst rPUSHREALO1
-	B_CALL OP1ToOP5
+	B_CALL OP1ToOP6
 	B_CALL StoX ;starting point
 	ld a,Xstep
 	B_CALL RclSysTok
@@ -54,14 +52,13 @@ runge_skip_simple_cache:
 	pop de
 	push de
 	call runge_load_y0
-	B_CALL OP1ToOP6
 
 runge_loop_start:
 	;start RK
 	;FPS=[Y*,step,X,X_target,...] 
 	pop de
 	push de
-	call runge_save_y_cache
+	call runge_save_y_caches
 
 	pop de
 	push de
@@ -96,7 +93,7 @@ runge_loop_f1_known:
 
 	pop de
 	push de
-	call runge_calc_errest ;FPS=[errest,f4*,Yn+1*,Y*,step,X,X_target,...]
+	call runge_calc_errest ;FPS=[errest,f4*,Yn+1*,f1*,Y*,step,X,X_target,...]
 
 	ld a,(OP1M)
 	or a
@@ -130,7 +127,7 @@ runge_nodouble:
 	;.9*step*(tol/abs(errest))^(1/4)
 runge_guess_skip:
 	B_CALL PopRealO2
-	rst rPUSHREALO1;FPS=[step_guess,f4*,Yn+1*,Y*,step,X,X_target,...]
+	rst rPUSHREALO1;FPS=[step_guess,f4*,Yn+1*,f1*,Y*,step,X,X_target,...]
 	;OP2=errest
 	
 	call runge_load_tolerance
@@ -153,14 +150,12 @@ runge_errest_skip:
 	ld (OP2),a
 	B_CALL Min
 	;min(.5h,guess) or min(2h,guess)
-	pop af
-	jr c,runge_retry;error too big,retry step
-	;step succeeded
-	;FPS=[f4*,Yn+1*,Y*,step,X,X_target,...]
+
 	push ix
 	pop hl
 	ld bc,-9
-	B_CALL Mov9ToOP2
+	add hl,bc
+	B_CALL Mov9ToOP2 ;step
 	pop af
 	push af
 	and 80h
@@ -171,7 +166,13 @@ runge_errest_skip:
 	or a
 	sbc hl,bc
 	ld de,OP1
+	ex de,hl
 	ldir ;update step
+	
+	pop af
+	jr c,runge_retry;error too big,retry step
+	;step succeeded
+	;FPS=[f4*,Yn+1*,f1*,Y*,step,X,X_target,...]
 	push ix
 	pop hl
 	ld bc,-9*2
@@ -198,18 +199,16 @@ runge_errest_skip:
 $$:
 	B_CALL CpOP1OP2
 	push af
-	;FIX: support multiple equations
-	B_CALL PopRealO1;f4*
-	B_CALL PopRealO2;Yn+1*
-	B_CALL PopRealO3;Y*
-	B_CALL PushRealO2
-	rst rPUSHREALO1
+	;FPS=[f4*,Yn+1*,f1*,Y*,step,X,X_target,...]
+	ld bc,2*256+2
+	call runge_dealloc_middle_FPS
 	;FPS=[f4*,Yn+1*,step_next,X+step,X_target,...]
 	pop af
 	jr z,runge_exit_loop;X+step=X_target
 	jr c,runge_loop_f1_known;X+step<X_target
 runge_exit_loop:	
 	;end RK
+	;FIX: find out which value to return (and interpolate)
 	;invalidate cache after RK is finished
 	pop de
 	call runge_lookup_simple_cache
@@ -226,22 +225,17 @@ runge_return_cache:
 	ret
 
 runge_retry:
-	;FPS=[f4*,Yn+1*,Y*,step,X,X_target,...]
-	B_CALL PopRealO2
-	B_CALL PopRealO2
-	pop af
-	push af
-	and 80h
-	ld (OP1),a
-	B_CALL CpyO1ToFPS1
-	;FPS=[Y*,step_updated,X,X_target,...]
-	;update X
-	B_CALL CpyTo1FPS2
-	B_CALL OP1ToOP5
-	B_CALL StoX
-	;update Y
-	B_CALL CpyTo6FPST
-	jr runge_loop_start
+	;FPS=[f4*,Yn+1*,f1*,Y*,step_updated,X,X_target,...]
+	pop de
+	push de
+	call runge_count_equations
+	add a;remove both f4* and Yn+1*
+	call runge_mult_A_by_9
+	ld e,a
+	ld d,0
+	B_CALL DeallocFPS1
+	;FPS=[f1*,Y*,step_updated,X,X_target,...]
+	jr runge_loop_f1_known
 
 runge_mult_add_de:
 	push de
@@ -368,50 +362,12 @@ runge_calc_errest_skip:
 	ld a,6
 	cp e
 	jr nz,runge_calc_errest_loop
+
+	ld bc,2*256+2
+	call runge_dealloc_middle_FPS ;delete f2* and f3* keep Yn+1* and f4*
 	
-	ld hl,(FPS)
-	call runge_count_equations
-	push af
-	add a;double it
-	call runge_HL_minus_A_times_9 ;f4 and Yn+1
-
-	pop af
-	push hl
-	push af
-	ld b,a
-	add a
-	add b;a=3*a
-	call runge_HL_minus_A_times_9; f3*,f2*,f1*
-
-	ex de,hl
-	pop af
-	pop hl
-	push af
-	add a
-	ld b,a
-	add a
-	add a
-	add a;*16
-	add b;*18=2*9
-	ld c,a
-	ld b,0
-	push bc
-	ldir
-
-	pop bc
-	pop af
-	ld b,a
-	add a
-	add a
-	add a
-	add b
-	add c;*27=3*9
-	ld e,a
-	ld d,0
-	B_CALL DeallocFPS1
-
 	rst rPUSHREALO1
-	;FPS=[errest,f4*,Yn+1*,Y*,step,X,X_target,...]
+	;FPS=[errest,f4*,Yn+1*,f1*,Y*,step,X,X_target,...]
 	ret
 
 runge_update_x_y:
@@ -438,23 +394,29 @@ runge_update_x_y:
 	add hl,de
 	rst rMOV9TOOP1
 	rst rFPADD
-	B_CALL OP1ToOP5
+	B_CALL OP1ToOP6
 	B_CALL StoX;X=X+h*a*0.1
 	B_CALL OP3ToOP4;h*a*0.1
 
 	pop de
-	res 7,d
-	ld e,0
+	push de
+	call runge_count_equations
+	call runge_mult_A_by_9
 	ld hl,(FPS)
+	ld b,0
+	ld c,a
+	or a
+	sbc hl,bc
+	pop de
+	ld e,5
+	rlc d
+	rlc d;skip first two bits
 runge_update_x_y_loop:
 	;D contains eval bits
 	;E contains equ nr
 	;HL contains address of fx
-	rrc d
+	rlc d
 	jr nc,runge_update_x_y_skip
-
-	ld bc,-9
-	add hl,bc
 
 	push hl
 	push de
@@ -468,20 +430,25 @@ runge_update_x_y_loop:
 	pop hl;Y
 	rst rMOV9TOOP1
 	rst rFPADD ;Y+h*a*0.1*fx
-	B_CALL OP1ToOP6
-
-	pop de
-	push de
-
-	call runge_save_y_cache
+	rst rPUSHREALO1
 
 	pop de
 	pop hl
+	ld bc,9
+	add hl,bc
 runge_update_x_y_skip:
-	inc e
-	ld a,6;0..5 are the equations
+	dec e
+	ld a,0FFh;0..5 are the equations
 	cp e
 	jr nz,runge_update_x_y_loop
+	push de
+	call runge_save_y_caches
+	pop de
+	call runge_count_equations
+	call runge_mult_A_by_9
+	ld e,a
+	ld d,0
+	B_CALL DeallocFPS1
 	ret
 
 runge_update_final_x_y:
@@ -500,7 +467,7 @@ runge_update_final_x_y:
 	add hl,de
 	B_CALL Mov9ToOP2 ;X
 	rst rFPADD ;X+h
-	B_CALL OP1ToOP5
+	B_CALL OP1ToOP6
 	B_CALL StoX
 
 	pop de
@@ -563,10 +530,6 @@ $$:
 	B_CALL Mov9ToOP2 ;Y
 	rst rFPADD ;Y+h(2/9*f1+1/3*f2+4/9*f3)
 	rst rPUSHREALO1 ;FPS=[Yn+1*,f3*,f2*,f1*,Y*,step,X,X_target,...]
-	B_CALL OP1ToOP6
-	pop de
-	push de
-	call runge_save_y_cache
 	pop de
 	pop hl
 	ld bc,9
@@ -576,28 +539,99 @@ runge_update_final_x_y_skip:
 	ld a,-1
 	cp e
 	jr nz,runge_update_final_x_y_loop
+	call runge_save_y_caches
 	ret
 
-runge_save_y_cache:;OP6=y, OP5=x, E=equation number
-	;fix:modify to store all y values at once
+runge_save_y_caches:
 	push de
 	call runge_lookup_simple_cache
-	;FIX:use proper equates
 	ld a,cacheRungeSimpleValidMask
 	or (hl)
 	ld (hl),a
 	inc hl
+	
 	ex de,hl
-	ld hl,OP5
-	ld bc,9
-	ldir
-	ex de,hl
-	pop de
-	call runge_HL_plus_E_times_9
-	ex de,hl
-	ld bc,9
 	ld hl,OP6
+	ld bc,9
+	ldir;copy X	
+
+	ld hl,(FPS)
+	pop bc
+	ld c,0
+runge_save_y_caches_loop:
+	rrc b
+	push bc
+	jr nc,runge_save_y_caches_dont_save
+	ld bc,9
+	or a
+	sbc hl,bc
+	push hl
 	ldir
+	pop hl
+	jr runge_save_y_caches_skip
+runge_save_y_caches_dont_save:
+	ld bc,9
+	ex de,hl
+	add hl,bc
+	ex de,hl
+runge_save_y_caches_skip:
+	pop bc
+	inc c
+	ld a,6
+	cp c
+	jr nz,runge_save_y_caches_loop
+	ret
+
+runge_dealloc_middle_FPS:;keeps the first B floats on the FPS and deletes the following C floats from the FPS
+	;WARNING:B+C shouldn't be bigger than 4 because 5*6*9=270>255
+	ld hl,(FPS)
+	push bc
+	call runge_count_equations
+	pop bc
+	ld e,a
+	xor a
+$$:
+	add e
+	djnz $b
+	call runge_mult_A_by_9
+	ld d,a
+	ld b,c
+	xor a
+$$:
+	add e
+	djnz $b
+	call runge_mult_A_by_9
+	ld e,a
+	push de;D=keep bytes E=delete bytes
+	ld b,0
+	ld c,d
+	or a
+	sbc hl,bc;starting point of floats to keep
+
+	push hl
+	ld d,0
+	or a
+	sbc hl,de;starting point of floats to delete
+
+	ex de,hl
+	pop hl
+	pop bc
+	push bc
+	ld c,b
+	ld b,0
+	ldir
+
+	pop de	
+	ld d,0
+	B_CALL DeallocFPS1
+	ret
+
+runge_mult_A_by_9:;destroys B
+	ld b,a
+	add a
+	add a
+	add a
+	add b
 	ret
 
 runge_load_OP2:;hl=M*256+E
@@ -607,13 +641,39 @@ runge_load_OP2:;hl=M*256+E
 	ld (OP2+1),hl
 	ret
 
+simpleCacheSize equ 1+7*9 ;X and Y1..Y6
+;SIMPLE CACHE:
+;0			statusbits
+;1..9		X
+;10..63	Y1..Y6
+;FOLLOWED BY ENDPOINT CACHE
+
+endpointCacheBlockSize equ (2+6+6)*9
+;ENDPOINT CACHE BLOCK:
+;0..8		X
+;9..17	step
+;18..71	Y1..Y6
+;72..125	f1* (for Y1..Y6)
+
+endpointCacheSize equ 1+endpointCacheBlockSize*2 ;X and Y1..Y6
+;ENDPOINT CACHE:
+;0				statusbits
+;1..126		cache block 1
+;127..252	cache block 1
+
+
 runge_lookup_simple_cache:
-	push de
 	call LookupAppVar
 	ex de,hl
 	inc hl
 	inc hl
-	pop de
+	ret
+
+runge_lookup_endpoint_cache:
+	call LookupAppVar
+	ex de,hl
+	ld bc,2+simpleCacheSize
+	add hl,bc
 	ret
 
 runge_HL_minus_equNr_times_9:
@@ -685,8 +745,3 @@ runge_f4_err: ;1/8 in floating point
 ;FIX: invalidate simple cache when raising error
 ;FIX: don't loop when x0 is requested
 
-;CACHE:
-;0			statusbits
-;1..9		X
-;10..63	Y1..Y6
-;REST OF CACHE....
