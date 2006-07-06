@@ -255,6 +255,8 @@ $$:
 	;NZ if X0 is closer
 	ret
 
+cache_size_per_equ equ 9*4+1
+
 euler_lookup_cache:
 ;E contains equation number
 	push de

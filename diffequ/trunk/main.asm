@@ -152,14 +152,11 @@ AppvarName:
 cacheSwitchBit					equ 0
 cache1ValidBit					equ 1
 cache2ValidBit					equ 2
-cacheRungeSimpleValidBit	equ 7
 
 cacheSwitchMask				equ 1<<cacheSwitchBit
 cache1ValidMask				equ 1<<cache1ValidBit
 cache2ValidMask				equ 1<<cache2ValidBit
-cacheRungeSimpleValidMask	equ 1<<cacheRungeSimpleValidBit
-cache_size_per_equ equ 9*4+1
-AppvarInitSize equ cache_size_per_equ*6
+AppvarInitSize equ 317 ;(9*4+1)*6=222 (euler) of (1+7*9)+(1+2*(126))=317 (runge)
 
 same_sign: ;Z if same sign of OP1 and OP2
 	ld a,(OP1)

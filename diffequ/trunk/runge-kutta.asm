@@ -1,5 +1,5 @@
 runge:
-	ld d,2+1
+	ld d,2
 	push de
 	B_CALL RclX
 	rst rPUSHREALO1;save X
@@ -15,8 +15,8 @@ runge:
 	pop hl
 	jr nz,runge_skip_simple_cache
 	pop de
-	inc e
-	call runge_HL_plus_E_times_9
+	dec e;skip X
+	call runge_HL_plus_cache_offset
 	rst rMOV9TOOP1
 	rst rOP1TOOP2
 	jr runge_return_cache
@@ -198,11 +198,18 @@ runge_errest_skip:
 	B_CALL OP1ExOP2 ;correct for negative stepsize
 $$:
 	B_CALL CpOP1OP2
+	pop de
+	push de
 	push af
 	;FPS=[f4*,Yn+1*,f1*,Y*,step,X,X_target,...]
 	ld bc,2*256+2
 	call runge_dealloc_middle_FPS
 	;FPS=[f4*,Yn+1*,step_next,X+step,X_target,...]
+	pop af
+	pop de
+	push de
+	push af
+	call runge_save_endpoint_cache
 	pop af
 	jr z,runge_exit_loop;X+step=X_target
 	jr c,runge_loop_f1_known;X+step<X_target
@@ -542,6 +549,98 @@ runge_update_final_x_y_skip:
 	call runge_save_y_caches
 	ret
 
+simpleCacheSize equ 1+7*9 ;X and Y1..Y6
+;SIMPLE CACHE:
+;0			statusbits
+;1..9		X
+;10..63	Y6..Y1 (reverse order!)
+;FOLLOWED BY ENDPOINT CACHE
+
+endpointCacheBlockSize equ (2+6+6)*9
+;ENDPOINT CACHE BLOCK:
+;0..8		X
+;9..17	step
+;18..71	Y6..Y1 (reverse order!)
+;72..125	f1* (for Y6..Y1) (reverse order!)
+
+endpointCacheSize equ 1+endpointCacheBlockSize*2 ;X and Y1..Y6
+;ENDPOINT CACHE:
+;0				statusbits
+;1..126		cache block 1
+;127..252	cache block 1
+
+cacheRungeSimpleValidBit	equ 7
+cacheRungeSimpleValidMask	equ 1<<cacheRungeSimpleValidBit
+
+runge_lookup_simple_cache:
+	call LookupAppVar
+	ex de,hl
+	inc hl
+	inc hl
+	ret
+
+runge_lookup_endpoint_cache:
+	call LookupAppVar
+	ex de,hl
+	ld bc,2+simpleCacheSize
+	add hl,bc
+	ret
+
+runge_save_endpoint_cache:
+	;FPS=[f4*,Yn+1*,step,X,X_target,...]
+	push de
+	call runge_lookup_endpoint_cache
+
+	ld a,(hl)
+	xor cacheSwitchMask
+	bit cacheSwitchBit,a
+	jr z,runge_save_endpoint_cache1
+	or cache2ValidMask
+	ld (hl),a
+	ld de,endpointCacheBlockSize+1
+	add hl,de;skip first cache
+	jr runge_save_endpoint_cache2
+runge_save_endpoint_cache1:
+	or cache1ValidMask
+	ld (hl),a
+	inc hl
+runge_save_endpoint_cache2:
+
+	ex de,hl
+	push ix
+	pop hl
+	ld bc,-9*2
+	add hl,bc
+	ld bc,9
+	ldir;copy X
+	ld bc,9
+	ldir;copy step
+
+	ex de,hl
+	pop de
+	push hl
+	push de
+	ld hl,(FPS)
+	call runge_HL_minus_equNr_times_9
+	pop de
+	push de
+	call runge_HL_minus_equNr_times_9
+	pop bc
+	pop de
+	push bc
+	call runge_save_in_appvar;Save Y*
+
+	ex de,hl
+	pop de
+	push hl
+	push de
+	ld hl,(FPS)
+	call runge_HL_minus_equNr_times_9
+	pop bc
+	pop de
+	call runge_save_in_appvar;Save Y*
+	ret
+
 runge_save_y_caches:
 	push de
 	call runge_lookup_simple_cache
@@ -555,35 +654,47 @@ runge_save_y_caches:
 	ld bc,9
 	ldir;copy X	
 
-	ld hl,(FPS)
-	pop bc
-	ld c,0
-runge_save_y_caches_loop:
-	rrc b
-	push bc
-	jr nc,runge_save_y_caches_dont_save
-	ld bc,9
-	or a
-	sbc hl,bc
+	ex de,hl
+	pop de
 	push hl
+	push de
+	ld hl,(FPS)
+	call runge_HL_minus_equNr_times_9
+	pop bc
+	pop de
+	;fallthrough
+
+runge_save_in_appvar:
+	;DE contains address in appvar
+	;HL contains address of first value on fps
+	;B  contains equation bits
+	ld c,5
+	rlc b
+	rlc b;skip first two bits
+runge_save_in_appvar_loop:
+	rlc b
+	push bc
+	jr nc,runge_save_in_appvar_dont_save
+	ld bc,9
 	ldir
-	pop hl
-	jr runge_save_y_caches_skip
-runge_save_y_caches_dont_save:
+	jr runge_save_in_appvar_skip
+runge_save_in_appvar_dont_save:
 	ld bc,9
 	ex de,hl
 	add hl,bc
 	ex de,hl
-runge_save_y_caches_skip:
+runge_save_in_appvar_skip:
 	pop bc
-	inc c
-	ld a,6
+	dec c
+	ld a,0FFh
 	cp c
-	jr nz,runge_save_y_caches_loop
+	jr nz,runge_save_in_appvar_loop
+	;DE is start+6*9
+	;HL is address of last value copied
 	ret
 
 runge_dealloc_middle_FPS:;keeps the first B floats on the FPS and deletes the following C floats from the FPS
-	;WARNING:B+C shouldn't be bigger than 4 because 5*6*9=270>255
+	;WARNING:B and C shouldn't be bigger than 4 because 5*6*9=270>255
 	ld hl,(FPS)
 	push bc
 	call runge_count_equations
@@ -641,41 +752,6 @@ runge_load_OP2:;hl=M*256+E
 	ld (OP2+1),hl
 	ret
 
-simpleCacheSize equ 1+7*9 ;X and Y1..Y6
-;SIMPLE CACHE:
-;0			statusbits
-;1..9		X
-;10..63	Y1..Y6
-;FOLLOWED BY ENDPOINT CACHE
-
-endpointCacheBlockSize equ (2+6+6)*9
-;ENDPOINT CACHE BLOCK:
-;0..8		X
-;9..17	step
-;18..71	Y1..Y6
-;72..125	f1* (for Y1..Y6)
-
-endpointCacheSize equ 1+endpointCacheBlockSize*2 ;X and Y1..Y6
-;ENDPOINT CACHE:
-;0				statusbits
-;1..126		cache block 1
-;127..252	cache block 1
-
-
-runge_lookup_simple_cache:
-	call LookupAppVar
-	ex de,hl
-	inc hl
-	inc hl
-	ret
-
-runge_lookup_endpoint_cache:
-	call LookupAppVar
-	ex de,hl
-	ld bc,2+simpleCacheSize
-	add hl,bc
-	ret
-
 runge_HL_minus_equNr_times_9:
 	call runge_count_equations
 runge_HL_minus_A_times_9:
@@ -688,11 +764,11 @@ $$:
 	djnz $b
 	ret
 
-runge_HL_plus_E_times_9:
-	ld a,e
-	or a
+runge_HL_plus_cache_offset:
+	ld a,5
+	sub e
 	ret z
-	ld b,e
+	ld b,a
 	ld de,9
 $$:
 	add hl,de
