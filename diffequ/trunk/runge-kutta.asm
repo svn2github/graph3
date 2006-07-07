@@ -21,17 +21,124 @@ runge:
 	rst rOP1TOOP2
 	jr runge_return_cache
 runge_skip_simple_cache:
+	call runge_lookup_endpoint_cache
+	ld a,cache1ValidMask|cache2ValidMask
+	and (hl)
+	cp cache1ValidMask|cache2ValidMask
+	jr nz,runge_skip_endpoint_cache
+	;both are valid
+	inc hl
+	push hl
+	B_CALL CpyTo1FPST
+	pop hl
+	push hl
+	B_CALL Mov9OP2Cp
+	pop hl
+	jr z,runge_return_interpolate
+	ld a,0
+	adc a,0;A=1 if X_Cache1>X_target ;A=0 if X_Cache1<X_target
+	ld bc,endpointCacheBlockSize
+	add hl,bc
+	push af
+	B_CALL Mov9OP2Cp
+	pop bc
+	jr z,runge_return_interpolate
+	ld a,0
+	adc a,0;A=1 if X_Cache2>X_target ;A=0 if X_Cache2<X_target
+	xor b;check if they're different
+	jr nz,runge_return_interpolate
+runge_skip_endpoint_cache:
+	;try to save some steps by using cache
 	B_CALL CpyTo2FPST
 	ld a,X0
 	B_CALL RclSysTok
 	B_CALL OP1ExOP2
-	B_CALL FPSub;X-X0
-	ld a,(OP1)
+	B_CALL FPSub;X_target-X0
+	ld hl,OP1
+	ld a,(hl)
 	and 80h 
 	pop de
 	or d
 	ld d,a
 	push de
+
+	ld e,0
+	push de;for use in cache checking with destroyed e value
+	ld (hl),0
+	rst rPUSHREALO1	;FPS=[abs(X_target-X0),X_target,...]
+	call runge_lookup_endpoint_cache
+	bit cache1ValidBit,(hl)
+	jr z,runge_skip_endpoint_cache1
+	pop de
+	push de
+	push hl
+	inc hl
+	call runge_check_cache
+	pop hl
+	jr nz,runge_skip_endpoint_cache1
+	pop de
+	inc e
+	push de
+runge_skip_endpoint_cache1:
+	bit cache2ValidBit,(hl)
+	jr z,runge_skip_endpoint_cache2
+	ld bc,1+endpointCacheBlockSize
+	add hl,bc
+	pop de
+	push de
+	call runge_check_cache
+	jr nz,runge_skip_endpoint_cache2
+	pop de
+	ld e,2
+	push de
+runge_skip_endpoint_cache2:
+	B_CALL PopRealO1
+	pop de
+	ld a,e;E=0 use X0, E=1 use Cache1, E=2 use Cache2
+	;FIX:try to use cache to reduce the number of steps 
+	or a
+	jr z,runge_load_from_initial_values
+	push af
+	call runge_lookup_endpoint_cache
+	inc hl
+	pop af
+	cp 2
+	jr nz,$f
+	ld bc,endpointCacheBlockSize
+	add hl,bc
+$$:
+	;HL=starting point of endpointCacheBlock
+	push hl
+	ld hl,2*9
+	B_CALL AllocFPS1
+	pop de
+
+	B_CALL CpyToFPS1;X
+	ex de,hl
+	B_CALL CpyToFPST;step
+	push de
+	pop ix;save (FPS)
+
+	ex de,hl
+	ld bc,-9
+	add hl,bc
+	pop af
+	push af
+	and 80h
+	ld (hl),a;correct stepsize direction
+
+	;load Y*
+	pop bc
+	push bc
+	ex de,hl
+	call runge_load_cache
+	;load f1*
+	pop bc
+	push bc
+	call runge_load_cache
+
+	jr runge_loop_f1_known
+runge_load_from_initial_values:
 	ld a,X0
 	B_CALL RclSysTok
 	rst rPUSHREALO1
@@ -47,7 +154,7 @@ runge_skip_simple_cache:
 
 	ld hl,(fps)
 	push hl
-	pop ix
+	pop ix;save (FPS)
 
 	pop de
 	push de
@@ -159,8 +266,10 @@ runge_errest_skip:
 	ld bc,-9
 	add hl,bc
 	B_CALL Mov9ToOP2 ;step
+	pop bc
 	pop af
 	push af
+	push bc
 	and 80h
 	ld (OP1),a
 	push ix
@@ -233,6 +342,8 @@ runge_exit_loop:
 	ld d,0
 	B_CALL DeallocFPS1
 	;FPS=[X_target,...]
+
+runge_return_interpolate:
 	pop de
 	call runge_interpolate
 
@@ -844,6 +955,56 @@ runge_save_in_appvar_skip:
 	;HL is address of last value copied
 	ret
 
+runge_check_cache:;check cache at HL, Z if cache is useful 
+	push de
+	B_CALL Mov9ToOP2;X_Cache
+	B_CALL CpyTo1FPS1;X_target
+	B_CALL FPSub
+	pop de
+	ld a,(OP1)
+	xor d
+	and 80h
+	jr nz,runge_check_cache_skip
+	xor a
+	ld (OP1),a;abs(X_target-X_Cache)
+	B_CALL CpyTo2FPST
+	B_CALL CpOP1OP2
+	jr z,$f
+	jr nc,runge_check_cache_skip
+$$:
+	B_CALL CpyO1ToFPST ;FPS=[min(FPST,abs(X_target,X_Cache)),X_target,...]
+	xor a
+	ret
+runge_check_cache_skip:
+	xor a
+	inc a
+	ret
+
+runge_load_cache:;B contains equation bits, HL contains address in cache
+	ld c,5
+	rlc b
+	rlc b;skip first two bits
+runge_load_cache_loop:
+	rlc b
+	push bc
+	jr nc,runge_load_cache_dont_load
+	push hl
+	push bc
+	rst rMOV9TOOP1
+	rst rPUSHREALO1
+	pop bc
+	pop hl
+runge_load_cache_dont_load:
+	ld bc,9
+	add hl,bc
+	pop bc
+	dec c
+	ld a,0FFh
+	cp c
+	jr nz,runge_load_cache_loop
+	;HL is start+6*9
+	ret
+
 runge_dealloc_middle_FPS:;keeps the first B floats on the FPS and deletes the following C floats from the FPS
 	;WARNING:B and C shouldn't be bigger than 4 because 5*6*9=270>255
 	ld hl,(FPS)
@@ -886,7 +1047,7 @@ $$:
 	pop de	
 	ld d,0
 	B_CALL DeallocFPS1
-	ret
+	ret	
 
 runge_mult_A_by_9:;destroys B
 	ld b,a
@@ -953,7 +1114,7 @@ runge_load_tolerance:
 	rst rMOV9TOOP1
 	ret
 runge_load_tolerance_value:
-	db 00h,80h,10h,00h,00h,00h,00h,00h,00h
+	db 00h,7Dh,10h,00h,00h,00h,00h,00h,00h
 
 runge_f1_inc: ;2/9 in floating point
 	db 00h,7Fh,22h,22h,22h,22h,22h,22h,22h
@@ -975,3 +1136,4 @@ runge_f4_err: ;1/8 in floating point
 ;FIX: change endpoint cache so that we know when the cache contains the start and end of an rk-step (invalidate if not?)
 ;FIX: don't loop when x0 is requested
 ;CLEANUP: don't multiply by 9 when deallocating FPS use DeallocFPS instead
+;FIX: make tolerance user choosable
