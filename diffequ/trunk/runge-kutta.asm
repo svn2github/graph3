@@ -1,5 +1,5 @@
 runge:
-	ld d,2
+	ld d,2+1
 	push de
 	B_CALL RclX
 	rst rPUSHREALO1;save X
@@ -53,7 +53,6 @@ runge_skip_simple_cache:
 	push de
 	call runge_load_y0
 
-runge_loop_start:
 	;start RK
 	;FPS=[Y*,step,X,X_target,...] 
 	pop de
@@ -63,6 +62,10 @@ runge_loop_start:
 	pop de
 	push de
 	call runge_execute_equ ;FPS=[f1*,Y*,step,X,X_target,...]
+
+	pop de
+	push de
+	call runge_save_endpoint_cache;save initial values in cache for easy interpolation
 
 runge_loop_f1_known:
 	pop de
@@ -217,14 +220,22 @@ runge_exit_loop:
 	;end RK
 	;FIX: find out which value to return (and interpolate)
 	;invalidate cache after RK is finished
-	pop de
 	call runge_lookup_simple_cache
 	res cacheRungeSimpleValidBit,(hl)
 
-	B_CALL PopRealO1
-	B_CALL PopRealO2;Yn+1
-	B_CALL PopRealO1
-	B_CALL PopRealO1
+	pop de
+	push de
+	call runge_count_equations
+	add a
+	add 2;*2+2
+	call runge_mult_A_by_9
+	ld e,a
+	ld d,0
+	B_CALL DeallocFPS1
+	;FPS=[X_target,...]
+	pop de
+	call runge_interpolate
+
 runge_return_cache:
 	B_CALL PopRealO1
 	B_CALL StoX
@@ -416,6 +427,8 @@ runge_update_x_y:
 	sbc hl,bc
 	pop de
 	ld e,5
+	res 6,d
+	res 7,d
 	rlc d
 	rlc d;skip first two bits
 runge_update_x_y_loop:
@@ -433,8 +446,23 @@ runge_update_x_y_loop:
 	B_CALL OP4ToOP2;h*a*0.1
 	B_CALL FPMult
    rst rOP1TOOP2
+
 	push ix
-	pop hl;Y
+	pop hl
+	pop de
+	push de
+
+	ld a,6
+	sub e
+	ld b,a;5-e
+	xor a
+runge_update_x_y_inner_loop:
+	rrc d
+	adc a,0
+	djnz runge_update_x_y_inner_loop
+	dec a
+	call runge_HL_plus_A_times_9
+	
 	rst rMOV9TOOP1
 	rst rFPADD ;Y+h*a*0.1*fx
 	rst rPUSHREALO1
@@ -547,6 +575,129 @@ runge_update_final_x_y_skip:
 	cp e
 	jr nz,runge_update_final_x_y_loop
 	call runge_save_y_caches
+	ret
+
+;def interpolate(xa,ya,fa,xb,yb,fb,x):
+;    #cubic hermite interpolation using divided differences
+;    #see: http://www.esm.psu.edu/courses/emch407/njs/notes02/ch3_2.doc
+;    divider=xb-xa*1.0
+;    row3   =(yb -ya   )/divider
+;    row4   =(fb  -row3)/divider
+;    row3   =(row3-fa  )/divider
+;    row4   =(row4-row3)/divider
+;    result =ya+(x-xa)*(fa+(x-xa)*(row3+(x-xb)*row4))
+;    return result
+runge_interpolate:
+	;FPS=[X_target,...]
+	push de
+	call runge_lookup_endpoint_cache
+	inc hl ;assume both caches are valid
+	pop de
+	push de
+	push hl
+	call runge_interpolate_load_cache
+	;FPS=[Xa,Ya,Fa,X_target,...]
+	pop hl
+	pop de
+	ld bc,endpointCacheBlockSize
+	add hl,bc
+	call runge_interpolate_load_cache
+	;FPS=[Xb,Yb,Fb,Xa,Ya,Fa,X_target,...]
+
+	B_CALL CpyTo1FPST;Xb
+	B_CALL CpyTo2FPS3;Xa
+	B_CALL FPSub
+	ld hl,(FPS)
+	push hl
+	rst rPUSHREALO1;divider=Xb-Xa
+	;FPS=[divider,Xb,Yb,Fb,Xa,Ya,Fa,X_target,...]
+
+	B_CALL CpyTo1FPS2;Yb
+	B_CALL CpyTo2FPS5;Ya
+	pop hl
+	push hl
+	call runge_interpolate_calc
+	rst rPUSHREALO1 ;row3=(yb-ya)/divider
+	;FPS=[row3,divider,Xb,Yb,Fb,Xa,Ya,Fa,X_target,...]
+
+	rst rOP1TOOP2;row3
+	B_CALL CpyTo1FPS4;Fb
+	pop hl
+	push hl
+	call runge_interpolate_calc
+	rst rPUSHREALO1 ;row4=(fb-row3)/divider
+	;FPS=[row4,row3,divider,Xb,Yb,Fb,Xa,Ya,Fa,X_target,...]
+
+	B_CALL CpyTo1FPS1;row3
+	B_CALL CpyTo2FPS8;Fa
+	pop hl
+	push hl
+	call runge_interpolate_calc 
+	B_CALL CpyO1ToFPS1;row3=(row3-fa)/divider
+
+	rst rOP1TOOP2 ;row3
+	B_CALL CpyTo1FPST;row4
+	pop hl
+	call runge_interpolate_calc
+	B_CALL CpyO1ToFPST;row4=(row4-row3)/divider
+
+	B_CALL CpyTo1FPS9;X_target
+	B_CALL CpyTo2FPS3;Xb
+	B_CALL FPSub
+	B_CALL PopRealO2;row4
+	B_CALL FPMult
+	B_CALL PopRealO2;row3
+	rst rFPADD
+	rst rPUSHREALO1;row3+(X_target-Xb)*row4
+	;FPS=[row3+(X_target-Xb)*row4,	divider,Xb,Yb,Fb,Xa,Ya,Fa,X_target,...]
+
+	B_CALL CpyTo1FPS8;X_target
+	B_CALL CpyTo2FPS5;Xa
+	B_CALL FPSub
+	B_CALL PopRealO2;row3+(X_target-Xb)*row4
+	rst rPUSHREALO1;X_target-Xa
+	B_CALL FPMult
+	B_CALL CpyTo2FPS7;Fa
+	rst rFPADD
+	;OP1=Fa+(X-Xa)*(row3+(X-Xb)*row4)
+	;FPS=[X_target-Xa,		divider,Xb,Yb,Fb,Xa,Ya,Fa,X_target,...]
+	
+	B_CALL PopRealO2;X_target-Xa
+	B_CALL FPMult
+	B_CALL CpyTo2FPS5;Ya
+	rst rFPADD
+	rst rOP1TOOP2
+	;OP2=Ya+(X_target-Xa)*(Fa+(X_target-Xa)*(row3+(X_target-Xb)*row4))
+
+	ld de,7*9
+	B_CALL DeallocFPS1
+	;FPS=[X_target,...]
+	ret	
+	
+runge_interpolate_calc:
+	push hl
+	B_CALL FPSub
+	pop hl
+	B_CALL Mov9ToOP2
+	B_CALL FPDiv
+	ret
+
+runge_interpolate_load_cache:
+	push de
+	push hl
+	ld hl,3*9
+	B_CALL AllocFPS1
+	pop de
+	B_CALL CpyToFPST
+	pop de
+	dec e;skip step
+	call runge_HL_plus_cache_offset
+	ex de,hl
+	B_CALL CpyToFPS1
+	ld bc,5*9;skip 5 floats
+	add hl,bc
+	ex de,hl
+	B_CALL CpyToFPS2
 	ret
 
 simpleCacheSize equ 1+7*9 ;X and Y1..Y6
@@ -767,6 +918,8 @@ $$:
 runge_HL_plus_cache_offset:
 	ld a,5
 	sub e
+runge_HL_plus_A_times_9:
+	or a
 	ret z
 	ld b,a
 	ld de,9
@@ -819,5 +972,6 @@ runge_f4_err: ;1/8 in floating point
 	db 00h,7Fh,12h,50h,00h,00h,00h,00h,00h
 
 ;FIX: invalidate simple cache when raising error
+;FIX: change endpoint cache so that we know when the cache contains the start and end of an rk-step (invalidate if not?)
 ;FIX: don't loop when x0 is requested
-
+;CLEANUP: don't multiply by 9 when deallocating FPS use DeallocFPS instead
