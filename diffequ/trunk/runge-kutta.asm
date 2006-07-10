@@ -1,7 +1,7 @@
 runge:
 	ld d,2+1
 	push de
-	B_CALL RclX
+	call RclT
 	rst rPUSHREALO1;save X
 	call runge_lookup_simple_cache
 	bit cacheRungeSimpleValidBit,(hl)
@@ -95,7 +95,6 @@ runge_skip_endpoint_cache2:
 	B_CALL PopRealO1
 	pop de
 	ld a,e;E=0 use X0, E=1 use Cache1, E=2 use Cache2
-	;FIX:try to use cache to reduce the number of steps 
 	or a
 	jr z,runge_load_from_initial_values
 	push af
@@ -143,7 +142,7 @@ runge_load_from_initial_values:
 	B_CALL RclSysTok
 	rst rPUSHREALO1
 	B_CALL OP1ToOP6
-	B_CALL StoX ;starting point
+	call StoT ;starting point
 	ld a,Xstep
 	B_CALL RclSysTok
 	pop af
@@ -327,7 +326,6 @@ $$:
 	jr c,runge_loop_f1_known;X+step<X_target
 runge_exit_loop:	
 	;end RK
-	;FIX: find out which value to return (and interpolate)
 	;invalidate cache after RK is finished
 	call runge_lookup_simple_cache
 	res cacheRungeSimpleValidBit,(hl)
@@ -349,7 +347,7 @@ runge_return_interpolate:
 
 runge_return_cache:
 	B_CALL PopRealO1
-	B_CALL StoX
+	call StoT
 	B_CALL OP2ToOP1
 	ret
 
@@ -524,7 +522,7 @@ runge_update_x_y:
 	rst rMOV9TOOP1
 	rst rFPADD
 	B_CALL OP1ToOP6
-	B_CALL StoX;X=X+h*a*0.1
+	call StoT;X=X+h*a*0.1
 	B_CALL OP3ToOP4;h*a*0.1
 
 	pop de
@@ -614,7 +612,7 @@ runge_update_final_x_y:
 	B_CALL Mov9ToOP2 ;X
 	rst rFPADD ;X+h
 	B_CALL OP1ToOP6
-	B_CALL StoX
+	call StoT
 
 	pop de
 	push de

@@ -47,12 +47,25 @@
 	DB 0,0,0,0	;Reserved
  list
 
-_EnableParserHook equ 5026h
+_EnableParserHook 	equ 5026h
+_EnableAppSwitchHook	equ 502Ch
+_EnableReGraphHook	equ 4FEAh
+_EnableRawKeyHook 	equ 4F66h
+_PutXY					equ 489Dh
 
 StartApp:
 	in a,(6)
 	ld hl,parser_hook
 	B_CALL EnableParserHook
+
+	ld hl,app_switch_hook
+	B_CALL EnableAppSwitchHook
+
+	ld hl,regraph_hook
+	B_CALL EnableReGraphHook
+
+	ld hl,raw_key_hook
+	B_CALL EnableRawKeyHook
 
 	call create_appvar
 
@@ -103,16 +116,89 @@ parser_hook_real:
 	pop de
 	jr nz,parser_hook_argument_error
 	;all checks passed, E contains equation number
-	push de
-	call runge
-	pop de
-	;call euler
-	nop
-	nop
-	nop
+	ld a,(cxCurApp)
+	cp cxTableEditor
+	jr nz,execute_diffequ_algorithm
+	;fallthrough
+execute_diffequ_algorithm:
+	;call runge
+	call euler
 	or 0FFh
 	ret
 	
+regraph_hook:
+	db 83h
+	cp 08h
+	jr nz,regraph_hook_return
+	
+	ld a,(OP1+2)
+	;X*t is even
+	;Y*t is odd
+	srl a
+	jr nc,regraph_hook_X
+	;process Y
+	and 07h
+	ld e,a
+	call execute_diffequ_algorithm
+	jr regraph_hook_return_NZ
+regraph_hook_X:;just return T (already in OP1)
+	call RclT
+regraph_hook_return_NZ:
+	or 0FFh
+	ret
+
+regraph_hook_return:
+	xor a
+	ret
+
+set_graph_mode:
+	ld a,(IY+grfModeFlags)
+	and 0Fh;reset all graph modes
+	or b ;set graph mode to parametric
+	ld (IY+grfModeFlags),a
+	set grfSimul,(IY+grfDBFlags)
+	ret
+
+app_switch_hook:
+	db 83h
+	ld b,1<<grfFuncM
+	cp cxTableEditor
+	jr z,set_graph_mode
+	ld b,1<<grfParamM
+	cp kTrace
+	jr z,set_graph_mode
+	cp cxGraph
+	jr z,set_graph_mode;let set_graph_mode return
+	ret
+
+CurTableRow equ 91DCh
+CurTableCol equ 91DDh
+
+raw_key_hook:
+	db 83h
+	push af
+	ld a,(cxCurApp)
+	cp cxTableEditor
+	jr nz,raw_key_hook_skip
+	ld hl,(CurTableRow)
+	dec l
+	jr nz,raw_key_hook_skip
+	xor a
+	cp h
+	jr z,raw_key_hook_skip
+	pop af
+	cp kUp
+	jr z,raw_key_hook_ignore_key
+	push af
+raw_key_hook_skip:
+	pop af
+	or a
+	ret
+
+raw_key_hook_ignore_key:
+	xor a
+	ret
+
 create_appvar:
 	ld hl,AppvarName
 	rst rMOV9TOOP1
@@ -182,6 +268,26 @@ load_equation:
 	ret
 equation:
 	db EquObj, tVarEqu, tY7,0
+
+RclT:
+	ld a,(cxCurApp)
+	cp cxTableEditor
+	jr nz,RclT_T
+	B_CALL RclX
+	ret
+RclT_T:
+	B_CALL TName
+	B_CALL RclVarSym
+	ret
+
+StoT:
+	ld a,(cxCurApp)
+	cp cxTableEditor
+	jr nz,$f
+	B_CALL StoX
+$$:
+	B_CALL StoT
+	ret
 
 
 X0 equ TMINt

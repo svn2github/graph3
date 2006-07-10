@@ -8,7 +8,7 @@
 
 euler:
 	push de
-	B_CALL RclX
+	call RclT
 	rst rPUSHREALO1;save X
 	rst rOP1TOOP2
 	ld a,X0
@@ -59,7 +59,7 @@ euler_init_cache:
 	add hl,de
 	rst rMOV9TOOP1
 	push hl
-	B_CALL StoX
+	call StoT
 	B_CALL PopRealO2
 	B_CALL PopRealO1
 	pop hl
@@ -70,7 +70,7 @@ euler_init_X0:
 	;set (variable) X and FPST
 	ld a,X0
 	B_CALL RclSysTok
-	B_CALL StoX
+	call StoT
 	pop de
 	push de
 	call load_yi0
@@ -131,7 +131,7 @@ euler_loop_sub1:
 	ld a,Xstep
 	B_CALL RclSysTok
 	rst rOP1TOOP2
-	B_CALL RclX
+	call RclT
 	pop af
 	push af
 	or a
@@ -141,7 +141,7 @@ euler_loop_sub1:
 euler_loop_add2:
 	rst rFPADD
 euler_loop_sub2:
-	B_CALL StoX
+	call StoT
 
 	;save calculated value in cache
 	pop de
@@ -162,7 +162,7 @@ euler_loop_cache1:
 	inc hl
 euler_loop_cache2:
 	push hl
-	B_CALL RclX
+	call RclT
 	B_CALL CpyTo2FPST
 	pop de
 	ld hl,OP1
@@ -187,7 +187,7 @@ euler_loop_cache2:
 euler_loop_skip:
 	push de
 	;check if final iteration is needed
-	B_CALL RclX
+	call RclT
 	rst rOP1TOOP2
 	B_CALL CpyTo1FPS1
 	B_CALL FPSub
@@ -211,7 +211,7 @@ euler_loop_skip:
 euler_skip_final:
 	B_CALL PopRealO2
 	B_CALL PopRealO1
-	B_CALL StoX
+	call StoT
 	B_CALL OP2ToOP1
 	pop de
 	ret
