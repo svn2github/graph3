@@ -255,16 +255,31 @@ $$:
 	;NZ if X0 is closer
 	ret
 
-cache_size_per_equ equ 9*4+1
+eulerCacheBlockSize equ 9*4+1
+;EULER CACHE BLOCK:
+;0			statusbits
+;1..9		X1
+;10..18	Y(X1)
+;19..27	X2
+;28..36	Y(X2)
+
+eulerCacheSize equ eulerCacheBlockSize*6 ;X and Y1..Y6
+;EULER CACHE:
+;0..36		Cache Block for Y1
+;37..73		Cache Block for Y2
+;74..110		Cache Block for Y3
+;111..147	Cache Block for Y4
+;148..184	Cache Block for Y5
+;185..221	Cache Block for Y6
 
 euler_lookup_cache:
 ;E contains equation number
 	push de
 	call LookupAppVar
 	ex de,hl
-	ld de,2-(cache_size_per_equ)
+	ld de,2-(eulerCacheBlockSize)
 	add hl,de
-	ld de,cache_size_per_equ
+	ld de,eulerCacheBlockSize
 	pop bc
 	ld b,c
 	inc b

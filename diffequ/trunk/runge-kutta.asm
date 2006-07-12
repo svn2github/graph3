@@ -219,7 +219,7 @@ runge_loop_f1_known:
 	jr runge_guess_skip
 runge_nodouble:
 	rst rOP1TOOP2
-	call runge_load_tolerance
+	call load_diftol
 	B_CALL FPDiv
 	ld hl,25h*256+7Fh;.25
 	call runge_load_OP2
@@ -239,7 +239,7 @@ runge_guess_skip:
 	rst rPUSHREALO1;FPS=[step_guess,f4*,Yn+1*,f1*,Y*,step,X,X_target,...]
 	;OP2=errest
 	
-	call runge_load_tolerance
+	call load_diftol
 	B_CALL CpOP1OP2
 	push af
 	ld hl,20h*256+80h;2
@@ -829,6 +829,7 @@ endpointCacheSize equ 1+endpointCacheBlockSize*2 ;X and Y1..Y6
 ;1..126		cache block 1
 ;127..252	cache block 1
 
+rungeCacheSize equ simpleCacheSize+endpointCacheSize
 cacheRungeSimpleValidBit	equ 7
 cacheRungeSimpleValidMask	equ 1<<cacheRungeSimpleValidBit
 
@@ -1107,13 +1108,6 @@ $$:
 	djnz $b
 	ret
 
-runge_load_tolerance:
-	ld hl,runge_load_tolerance_value
-	rst rMOV9TOOP1
-	ret
-runge_load_tolerance_value:
-	db 00h,7Dh,10h,00h,00h,00h,00h,00h,00h
-
 runge_f1_inc: ;2/9 in floating point
 	db 00h,7Fh,22h,22h,22h,22h,22h,22h,22h
 runge_f2_inc: ;3/9 in floating point
@@ -1134,4 +1128,5 @@ runge_f4_err: ;1/8 in floating point
 ;FIX: change endpoint cache so that we know when the cache contains the start and end of an rk-step (invalidate if not?)
 ;FIX: don't loop when x0 is requested
 ;CLEANUP: don't multiply by 9 when deallocating FPS use DeallocFPS instead
+;CLEANUP: use OP*Set* to optimize the code
 ;FIX: make tolerance user choosable

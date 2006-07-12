@@ -51,7 +51,10 @@ _EnableParserHook 	equ 5026h
 _EnableAppSwitchHook	equ 502Ch
 _EnableReGraphHook	equ 4FEAh
 _EnableRawKeyHook 	equ 4F66h
-_PutXY					equ 489Dh
+_EnableMenuHook		equ 5083h
+_EnableWindowHook		equ 4FB1h
+_WPutSEOL				equ 4522h
+_SetNumWindow			equ 452Bh
 
 StartApp:
 	in a,(6)
@@ -66,6 +69,12 @@ StartApp:
 
 	ld hl,raw_key_hook
 	B_CALL EnableRawKeyHook
+
+	ld hl,MenuHook
+	B_CALL EnableMenuHook
+
+	ld hl,WindowHook
+	B_CALL EnableWindowHook
 
 	call create_appvar
 
@@ -116,9 +125,6 @@ parser_hook_real:
 	pop de
 	jr nz,parser_hook_argument_error
 	;all checks passed, E contains equation number
-	ld a,(cxCurApp)
-	cp cxTableEditor
-	jr nz,execute_diffequ_algorithm
 	;fallthrough
 execute_diffequ_algorithm:
 	;call runge
@@ -161,13 +167,12 @@ set_graph_mode:
 
 app_switch_hook:
 	db 83h
+	ld b,1<<grfParamM
+	push af
+	call set_graph_mode
+	pop af
 	ld b,1<<grfFuncM
 	cp cxTableEditor
-	jr z,set_graph_mode
-	ld b,1<<grfParamM
-	cp kTrace
-	jr z,set_graph_mode
-	cp cxGraph
 	jr z,set_graph_mode;let set_graph_mode return
 	ret
 
@@ -179,7 +184,7 @@ raw_key_hook:
 	push af
 	ld a,(cxCurApp)
 	cp cxTableEditor
-	jr nz,raw_key_hook_skip
+	jr nz,raw_key_hook_no_table
 	ld hl,(CurTableRow)
 	dec l
 	jr nz,raw_key_hook_skip
@@ -190,6 +195,7 @@ raw_key_hook:
 	cp kUp
 	jr z,raw_key_hook_ignore_key
 	push af
+raw_key_hook_no_table:
 raw_key_hook_skip:
 	pop af
 	or a
@@ -199,7 +205,201 @@ raw_key_hook_ignore_key:
 	xor a
 	ret
 
-create_appvar:
+MenuHook:;PORTED
+	db	83h
+	or	a
+	jr	nz,MenuHook_Not0
+	ld	a,(MenuCurrent)
+	cp	39h ;Calc Menu (parametric mode)
+	jr	z,MenuHook_ReplaceMenu
+	cp 11h
+	jr nz,MenuHook_Allow
+MenuHook_ReplaceMenu:
+	ld	hl,CalcMenu
+	ld	de,tempSwapArea
+	push	de
+	call	Mov9
+	pop	hl
+	or	0FFh
+	ret
+MenuHook_Not0:
+MenuHook_Allow:
+	xor	a
+	ret
+
+CalcMenu:;PORTED
+	db 1		;how many headers?
+	db 1 	;how many choices under 1st header?
+	db 24h	;string table entry for "CALCULATE"
+	db 0,kEval ;these are 2-byte keypresses of each entry
+
+WindowHook:;PORTED
+	db 83h
+	push	af
+	ld	a,(cxCurApp)
+	cp	kWindow
+	jr	z,WindowHook_Possible
+	pop	af
+	xor	a
+	ret
+WindowHook_Possible:
+	pop	af
+;	call	CheckGraphMode
+;	ret	z
+	or	a
+	jr	nz,WindowHook_Not0
+	or	0FFh
+	ld	a,(ix)
+	ret
+WindowHook_Not0:
+	dec	a
+	jr	nz,WindowHook_Not1
+	or	0FFh
+	ld	a,(ix+3)
+	ret
+WindowHook_Not1:
+	dec	a
+	jr	nz,WindowHook_Not2
+	or	0FFh
+	ld	a,(ix-3)
+	ret
+WindowHook_Not2:
+	dec	a
+	jr	nz,WindowHook_Not3
+	ld a,(ix)
+	cp WindowHook_Identifier
+	jr nc,WindowHook_3NoToken
+	ld d,tVarSys
+	ld e,a
+	B_CALL PutTokString
+	jr WindowHook_3Token
+WindowHook_3NoToken:
+	ld	l,(ix+1)
+	ld	h,(ix+2)
+	call	PutsApp
+WindowHook_3Token
+	ld	a,'='
+	B_CALL PutC
+	B_CALL SetNumWindow
+	jr	WindowHook_DispNum
+WindowHook_Not3:
+	dec	a
+	ret	z;A=04h return Z
+	dec	a
+	jr	nz,WindowHook_Not5
+	ld a,(hl)
+	call WindowHook_RclValue
+	ld	hl,OP1
+	or	0FFh
+	ret
+WindowHook_Not5:
+	dec	a
+	jr	nz,WindowHook_Not6
+	set	graphDraw,(iy + graphFlags)
+	ld a,(hl)
+	cp WindowHook_Identifier
+	jr nc,WindowHook_6NoToken
+	B_CALL StoSysTok
+	jr WindowHook_6Token
+WindowHook_6NoToken:
+	rst rPUSHREALO1
+	call load_diftol_address
+	ex de,hl
+	B_CALL PopReal
+WindowHook_6Token:
+	ld	hl,OP1
+	or	0FFh
+	ret
+WindowHook_Not6:
+	dec	a
+	jr	nz,WindowHook_Not7
+	ld	hl,WindowHook_Table + 3
+WindowHook_Disallow:
+	or	0FFh
+	ret
+WindowHook_Not7:
+	dec	a
+	ret	z
+	dec	a
+	jr	nz,WindowHook_Not9
+WindowHook_DispNum:
+	ld a,(ix)
+	call WindowHook_RclValue
+	ld	a,15h
+	B_CALL FormEReal
+	ld	hl,OP3
+	B_CALL WPutSEOL
+	or	0FFh
+	ret
+WindowHook_Not9:
+	dec	a
+	jr	nz,WindowHook_Not10
+	ld	a,b
+	cp	kLastEnt
+	jr	z,WindowHook_Disallow
+WindowHook_Not10:
+WindowHook_Allow:
+	xor	a
+	ret
+
+WindowHook_RclValue:
+	cp WindowHook_Identifier
+	jr nc,WindowHook_RclValueNoToken
+	B_CALL RclSysTok
+	ret
+WindowHook_RclValueNoToken:
+	call load_diftol
+	ret
+
+WindowHook_Table:
+	db 0FFh
+	dw 0
+	db TMINt
+	dw 0
+	db TMAXt
+	dw 0
+	db TSTEPt
+	dw 0
+	db XMINt
+	dw 0
+	db XMAXt
+	dw 0
+	db XSCLt
+	dw 0
+	db YMINt
+	dw 0
+	db YMAXt
+	dw 0
+	db YSCLt
+	dw 0
+	db 0FEh
+	dw WindowHook_DifTolStr
+	db 0FFh
+
+WindowHook_DifTolStr:
+	db "Diftol",0
+
+WindowHook_Identifier equ 0FEh ;first identifier-1 that's not a system variable token
+
+PutsApp:;PORTED
+	rst	20h
+	ld	hl,OP1
+	B_CALL PutS
+	ret
+
+Mov9:;PORTED
+	ldi 
+ 	ldi
+	ldi
+	ldi
+	ldi
+	ldi
+	ldi
+	ldi
+	ldi
+	ret
+
+create_appvar:;PORTED
 	ld hl,AppvarName
 	rst rMOV9TOOP1
 	B_CALL ChkFindSym
@@ -209,8 +409,17 @@ create_appvar:
 	inc de
 	inc de
 	ex de,hl
-	ld bc,AppvarInitSize
+	ld bc,rungeCacheSize
+	push hl
+	push bc
 	B_CALL MemClear
+	pop hl
+	pop bc
+	add hl,bc
+	ex de,hl
+	ld hl,appvarInitData
+	ld bc,appvarInitDataLength
+	ldir
 Exists:
 	ld a,b
 	or a
@@ -219,7 +428,7 @@ Exists:
 NotArchived:
 	ret
 
-LookupAppVar:
+LookupAppVar:;PORTED
 	ld	hl,AppvarName
 	rst	20h
 	B_CALL	ChkFindSym
@@ -228,21 +437,6 @@ LookupAppVar:
 
 AppvarName:
 	db AppVarObj,"Diffequ",0
-
-;	db 0 status bits
-;	db 0,0,0,0,0,0,0,0,0 ;1;x1
-;	db 0,0,0,0,0,0,0,0,0 ;1;y1(x1)
-;	db 0,0,0,0,0,0,0,0,0 ;2;x1
-;	db 0,0,0,0,0,0,0,0,0 ;2;y1(x1)
-
-cacheSwitchBit					equ 0
-cache1ValidBit					equ 1
-cache2ValidBit					equ 2
-
-cacheSwitchMask				equ 1<<cacheSwitchBit
-cache1ValidMask				equ 1<<cache1ValidBit
-cache2ValidMask				equ 1<<cache2ValidBit
-AppvarInitSize equ 317 ;(9*4+1)*6=222 (euler) of (1+7*9)+(1+2*(126))=317 (runge)
 
 same_sign: ;Z if same sign of OP1 and OP2
 	ld a,(OP1)
@@ -268,6 +462,18 @@ load_equation:
 	ret
 equation:
 	db EquObj, tVarEqu, tY7,0
+
+load_diftol_address:
+	call LookupAppVar
+	ld hl,2+rungeCacheSize+1
+	add hl,de
+	ret
+
+load_diftol:
+	call load_diftol_address
+	rst rMOV9TOOP1
+	ret
+	
 
 RclT:
 	ld a,(cxCurApp)
@@ -296,5 +502,31 @@ Xstep equ TSTEPt
 	include "euler.asm"
 	include "runge-kutta.asm"
 
+cacheSwitchBit					equ 0
+cache1ValidBit					equ 1
+cache2ValidBit					equ 2
+
+cacheSwitchMask				equ 1<<cacheSwitchBit
+cache1ValidMask				equ 1<<cache1ValidBit
+cache2ValidMask				equ 1<<cache2ValidBit
+
+appvarInitData:
+	db 0;statusbits
+appvarInitDataDiftol:
+	db 00h,7Dh,10h,00h,00h,00h,00h,00h,00h ;.001 diftol
+appvarInitDataEnd:
+appvarInitDataLength equ appvarInitDataEnd-appvarInitData
+
+;APPVAR
+;0..316		Cache (size of runge cache)
+;317			Statusbits
+;318..326	Diftol
+
+AppvarInitSize 	equ rungeCacheSize+appvarInitDataLength ;runge cache is larger than euler cache
+
+
+end_of_app:
+app_size equ end_of_app-4080h
 ;NOT IMPLEMENTED:support Yi* parameter
 ;NOT IMPLEMENTED:disallow y1(..) calls inside ODE's
+;NOT IMPLEMENTED:reset diftol when zoom:Zstandard (and tstep,tmax to our own values?)
