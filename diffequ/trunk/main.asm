@@ -53,8 +53,19 @@ _EnableReGraphHook	equ 4FEAh
 _EnableRawKeyHook 	equ 4F66h
 _EnableMenuHook		equ 5083h
 _EnableWindowHook		equ 4FB1h
+_EnableGraphHook		equ 4FB7h
 _WPutSEOL				equ 4522h
 _SetNumWindow			equ 452Bh
+
+_SetCursorHook			equ 4F60h
+_Mon						equ 401Eh
+_newContext0			equ 4033h
+_SendKPress				equ 4024h
+_JForceCmd				equ 402Ah
+_restoreTR				equ 458Bh
+_saveTR					equ 4588h
+_cxPutAway				equ 4036h
+_POPCX					equ 49E1h
 
 StartApp:
 	in a,(6)
@@ -75,6 +86,9 @@ StartApp:
 
 	ld hl,WindowHook
 	B_CALL EnableWindowHook
+
+	ld hl,GraphHook
+	B_CALL EnableGraphHook
 
 	call create_appvar
 
@@ -127,11 +141,20 @@ parser_hook_real:
 	;all checks passed, E contains equation number
 	;fallthrough
 execute_diffequ_algorithm:
-	;call runge
+	push de
+	call load_status_address
+	bit EulerBit,(hl)
+	pop de
+	jr nz,execute_diffequ_algorithm_RK
 	call euler
 	or 0FFh
 	ret
 	
+execute_diffequ_algorithm_RK:
+	call runge
+	or 0FFh
+	ret
+
 regraph_hook:
 	db 83h
 	cp 08h
@@ -163,6 +186,7 @@ set_graph_mode:
 	or b ;set graph mode to parametric
 	ld (IY+grfModeFlags),a
 	set grfSimul,(IY+grfDBFlags)
+	set 0,(IY+24);set ExprOff because we don't want to see the X*T and Y*T expressions
 	ret
 
 app_switch_hook:
@@ -174,6 +198,8 @@ app_switch_hook:
 	ld b,1<<grfFuncM
 	cp cxTableEditor
 	jr z,set_graph_mode;let set_graph_mode return
+	cp kFormat
+	jr z,ModeHook
 	ret
 
 CurTableRow equ 91DCh
@@ -202,6 +228,25 @@ raw_key_hook_skip:
 	ret
 
 raw_key_hook_ignore_key:
+	xor a
+	ret
+
+GraphHook:
+	db 83h
+GraphHook_Not2:
+	cp 06h
+	jr nz,GraphHook_Not6
+	ld a,b
+	cp kStd
+	jr nz,GraphHook_Allow
+	push bc
+	call load_diftol_address
+	ex de,hl
+	ld hl,appvarInitDataDiftol
+	call Mov9
+	pop bc
+GraphHook_Not6:
+GraphHook_Allow:
 	xor a
 	ret
 
@@ -313,7 +358,12 @@ WindowHook_6Token:
 WindowHook_Not6:
 	dec	a
 	jr	nz,WindowHook_Not7
-	ld	hl,WindowHook_Table + 3
+	call load_status_address
+	bit EulerBit,(hl)
+	ld	hl,WindowHook_TableEuler + 3
+	jr z,$f
+	ld hl,WindowHook_TableRK + 3
+$$:
 WindowHook_Disallow:
 	or	0FFh
 	ret
@@ -351,7 +401,30 @@ WindowHook_RclValueNoToken:
 	call load_diftol
 	ret
 
-WindowHook_Table:
+WindowHook_TableEuler:
+	db 0FFh
+	dw 0
+	db TMINt
+	dw 0
+	db TMAXt
+	dw 0
+	db TSTEPt
+	dw 0
+	db XMINt
+	dw 0
+	db XMAXt
+	dw 0
+	db XSCLt
+	dw 0
+	db YMINt
+	dw 0
+	db YMAXt
+	dw 0
+	db YSCLt
+	dw 0
+	db 0FFh
+
+WindowHook_TableRK:
 	db 0FFh
 	dw 0
 	db TMINt
@@ -380,6 +453,513 @@ WindowHook_DifTolStr:
 	db "Diftol",0
 
 WindowHook_Identifier equ 0FEh ;first identifier-1 that's not a system variable token
+
+;;;;;;;;;;;;;;;;Start of ModeHook PORTED from graph3
+
+modeTemp		equ appBackUpScreen + 600
+					; 742-749 contains data from saveStuff.. i was stupid
+saveStuff	equ appBackUpScreen + 750
+
+_Flags		equ appBackUpScreen +  30
+
+ModeHook:
+	ld	hl,97A2h	; current selection
+	ld	(hl),0
+
+	call load_status_address ;Destroys OP1
+	ld a,(hl)
+	ld (_Flags),a
+
+	ld	de,saveStuff
+	ld	hl,curRow
+	ldi 
+	ldi
+	ld	hl,flags + textFlags
+	ldi
+	ld	hl,cursorHookPtr
+	ldi 
+	ldi 
+	ldi
+	ld	hl,flags + 34h
+	ldi
+
+	ld	sp,(onSP)
+	ld	hl,ModeHook_gmMonVectors
+	B_CALL AppInit
+
+	set	saIndic,(iy + newIndicFlags)
+	in	a,(6)
+	ld	hl,CursorHook
+	B_CALL SetCursorHook
+
+	ld	a,cxextapps
+	ld	(cxCurApp),a
+
+	call	ModeHook_gmcxRedisp_ForSure
+	B_JUMP Mon
+
+ModeHook_BlinkItem:
+	ld	b,(hl)
+	ld	hl,curCol
+	ld	a,(hl)
+	or	a
+	jr	z,ModeHook_BlinkSkip
+	dec	b
+	inc	(hl)
+ModeHook_BlinkSkip:
+	set	textInverse,(iy + textFlags)
+ModeHook_BlinkLoop:
+	ld	a,' '
+	B_CALL PutC
+	djnz	ModeHook_BlinkLoop
+	res	textInverse,(iy + textFlags)
+	ret
+
+ModeHook_DrawItemX:
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ld	(curRow),de
+ModeHook_DrawItem:
+	bit	1,(ix)
+	jr	nz,ModeHook_NotLeft
+	xor	a
+	ld	(curCol),a
+ModeHook_NotLeft:
+	ld	a,(curCol)
+	or	a
+	jr	z,ModeHook_DrawNoSpace
+	push	ix
+	ld	a,' '
+	B_CALL PutC
+	pop	ix
+ModeHook_DrawNoSpace:
+	ld	l,(ix+3)
+	ld	h,(ix+4)
+	ld	a,(ix+5)
+	and	(hl)
+	cp	(ix+6)
+	jr	nz,ModeHook_NotSel
+	set	textInverse,(iy + textFlags)
+ModeHook_NotSel:
+	push	ix
+	ld	h,(ix+1)
+	ld	a,(ix+2)
+	or a
+	jr z,ModeHook_Token
+	ld l,h
+	ld h,a
+	jr ModeHook_PutsLoop
+ModeHook_Token:
+	ld l,tGFormat
+	ld	(OP1),hl
+	ld	hl,OP1
+	B_CALL Get_Tok_Strng
+	ld	hl,OP3
+ModeHook_PutsLoop:
+	ld	a,(hl)
+	inc	hl
+	or	a
+	jr	z,ModeHook_PutsDone
+	push	hl
+	B_CALL PutMap
+	pop	hl
+	ld	a,(curCol)
+	inc	a
+	ld	(curCol),a
+	jr	ModeHook_PutsLoop
+ModeHook_PutsDone:
+	pop	ix
+	bit	0,(ix)
+	jr	nz,ModeHook_NotRight
+	ld	a,(curRow)
+	inc	a
+	ld	(curRow),a
+ModeHook_NotRight:
+	res	textInverse,(iy + textFlags)
+	ret
+
+ModeHook_Table:
+	db	00000101b	
+	dw tRectG,  flags + grfDBFlags	
+	db 1<<grfPolar,0	,0
+
+	db	00000110b
+	dw tPolarG,  flags + grfDBFlags	
+	db 1<<grfPolar,1<<grfPolar	,0
+
+	db	00001101b
+	dw tCoordOn,  flags + grfDBFlags			
+	db 1<<grfNoCoord,0	,0
+
+	db	00001110b
+	dw tCoordOff,  flags + grfDBFlags			
+	db 1<<grfNoCoord,1<<grfNoCoord	,0
+
+	db	00001101b
+	dw tGridOff,  flags + grfDBFlags			
+	db 1<<grfGrid,0	,1
+
+	db	00001110b
+	dw tGridOn,  flags + grfDBFlags			
+	db 1<<grfGrid,1<<grfGrid	,1
+
+	db	00001101b
+	dw tAxisOn,  flags + grfDBFlags			
+	db 1<<grfNoAxis,0	,1
+
+	db	00001110b
+	dw tAxisOff,  flags + grfDBFlags			
+	db 1<<grfNoAxis,1<<grfNoAxis	,1
+
+	db	00001101b
+	dw tLblOff,  flags + grfDBFlags			
+	db 1<<grfLabel,0	,0
+
+	db	00001110b
+	dw tLblOn,  flags + grfDBFlags			
+	db 1<<grfLabel,1<<grfLabel	,0
+
+	db	00001001b
+	dw ModeHook_Strings_Euler,  _Flags			
+	db 1<<EulerBit,0	,2
+
+	db	00001010b
+	dw ModeHook_Strings_RungeKutta,  _Flags			
+	db 1<<EulerBit,1<<EulerBit	,2
+
+ModeHook_Strings_Euler:
+	db "Euler",0
+ModeHook_Strings_RungeKutta:
+	db "RungeKutta",0
+
+ModeHook_gmMonVectors:
+	dw ModeHook_gmcxMain,ModeHook_gmcxDummyRet,ModeHook_gmcxPutAway
+	dw ModeHook_gmcxRedisp,ModeHook_gmcxDummyRet,ModeHook_gmcxDummyRet
+	db 0
+
+ModeHook_Quit:
+	B_CALL POPCX
+ModeHook_Quit_NoPop:
+	ld	a,cxFormat
+	ld	(cxCurApp),a
+
+	call load_status_address ;Destroys OP1
+	ld a,(_Flags)
+	ld (hl),a
+
+	ld	hl,saveStuff
+	ld	de,curRow
+	ldi 
+	ldi
+	ld	de,flags + textFlags
+	ldi
+	ld	de,cursorHookPtr
+	ldi 
+	ldi 
+	ldi
+	ld	de,flags + 34h
+	ldi
+	res	saIndic,(iy + newIndicFlags)
+ModeHook_gmcxDummyRet:
+	ret
+
+ModeHook_gmcxPutAway:
+	call	ModeHook_Quit
+	bit	monAbandon,(iy + monFlags)
+	jr	nz,ModeHook_Off
+	ld	a,iall
+	out	(intrptEnPort),a
+	B_CALL LCD_DRIVERON
+	set	onRunning,(iy + onFlags)
+	ei
+ModeHook_Off:
+	B_JUMP cxPutAway
+
+ModeHook_gmcxRedisp:
+	ld	a,(kbdKey)
+	cp	kClear
+	ret	nz
+ModeHook_gmcxRedisp_ForSure:
+	B_CALL ClrScrnFull
+	xor	a
+	ld	(curRow),a
+
+	ld	ix,ModeHook_Table
+	ld	hl,modeTemp
+ModeHook_BigLoop:
+	push	hl
+	ld	hl,(curRow)
+	push	hl
+	call	ModeHook_DrawItem
+	pop	de
+	pop	hl
+	bit	1,(ix)
+	jr	nz,ModeHook_NotLeftX
+	ld	d,0
+ModeHook_NotLeftX:
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	inc	hl
+	ld	a,(curCol)
+	sub	d
+	ld	(hl),a
+	inc	hl
+	ld	a,(ix)
+	and	00000101b
+	ld	de,8
+	add	ix,de
+	jr	nz,ModeHook_BigLoop
+	ret
+
+ModeHook_gmcxMain:
+	cp    kExtApps
+	jr    nz,ModeHook_NotApps
+	ld	a,kQuit
+	;call  ModeHook_Quit
+	;ld    hl,progCurrent
+	;ld    de,progToEdit
+	;ld    bc,8
+	;ldir
+	;bjump $4C51       ;execute app
+ModeHook_NotApps:
+
+	cp	kQuit
+	jr	c,ModeHook_NotExternal
+	cp    kTrace
+	jr	z,ModeHook_GraphKey
+	jr    nc,ModeHook_NotExternal
+	cp	kGraph
+	jr	z,ModeHook_GraphKey
+	ld	hl,97A2h	; current selection
+	ld	(hl),0
+	cp	kFormat
+	jp	z,ModeHook_gmcxRedisp_ForSure
+	push	af
+	push	bc
+	call  ModeHook_Quit
+	pop	bc
+	pop	af
+	ld    sp,(onSP)
+	res   6,(iy + curFlags)
+	B_CALL newContext0
+	xor   a
+	B_JUMP SendKPress
+ModeHook_GraphKey:
+	B_JUMP JForceGraphKey
+ModeHook_NotExternal:
+
+	cp	kLeft
+	jr	nz,ModeHook_NotkLeft
+	call	ModeHook_Lookup
+	bit	1,(ix)
+	ret	z
+	call	ModeHook_DrawItemX
+	ld	hl,97A2h
+	dec	(hl)
+ModeHook_Disallow:
+	xor	a
+	ret
+ModeHook_NotkLeft:
+
+	cp	kRight
+	jr	nz,ModeHook_NotkRight
+	call	ModeHook_Lookup
+	bit	0,(ix)
+	ret	z
+	call	ModeHook_DrawItemX
+	ld	hl,97A2h
+	inc	(hl)
+	xor	a
+	ret
+ModeHook_NotkRight:
+
+	cp	kUp
+	jr	nz,ModeHook_NotkUp
+	call	ModeHook_Lookup
+	bit	3,(ix)
+	ret	z
+	call	ModeHook_DrawItemX
+	ld	hl,97A2h
+	ld	de,-8
+ModeHook_FindUp1:
+	bit	1,(ix)
+	jr	z,ModeHook_FindUp2
+	dec	(hl)
+	add	ix,de
+	jr	ModeHook_FindUp1
+ModeHook_FindUp2:
+	dec	(hl)
+	add	ix,de
+	bit	1,(ix)
+	jr	nz,ModeHook_FindUp2
+	ret
+ModeHook_NotkUp:
+
+	cp	kDown
+	jr	nz,ModeHook_NotkDown
+	call	ModeHook_Lookup
+	bit	2,(ix)
+	ret	z
+	call	ModeHook_DrawItemX
+	ld	hl,97A2h
+ModeHook_FindDown1M1:
+	ld	de,8
+ModeHook_FindDown1:
+	inc	(hl)
+	add	ix,de
+	bit	1,(ix)
+	jr	nz,ModeHook_FindDown1
+	ret
+ModeHook_NotkDown:
+
+	cp	kClear
+	jr	nz,ModeHook_NotClear
+	call	ModeHook_Quit
+	B_JUMP JForceCmdNoChar
+ModeHook_NotClear:
+
+	cp	kEnter
+	jp	nz,ModeHook_NotkEnter
+	call	ModeHook_Lookup
+	ex	de,hl
+	ld	l,(ix+3)
+	ld	h,(ix+4)
+	ld	a,(ix+5)
+	and	(hl)
+	cp	(ix+6)
+	ret	z
+	ld a,(ix+7)
+	or a
+	jr z,ModeHook_DontReset
+	set graphDraw,(IY+graphFlags)
+	dec a
+	jr z,ModeHook_DontReset
+	;erase cache when needed
+	push hl
+	push de
+	push af
+	call LookupAppVar 
+	ex de,hl
+	inc hl
+	inc hl
+	ld bc,rungeCacheSize
+	B_CALL MemClear
+	pop af
+	pop de
+	pop hl
+ModeHook_DontReset:
+	ld	a,(ix+5)
+	cpl
+	and	(hl)
+	or	(ix+6)
+	ld	c,(hl)
+	ld	(hl),a
+	ld	a,(de)
+	ld	h,0
+	ld	l,a
+	ld	(curRow),hl
+	ld	de,-8
+ModeHook_FindUp3:
+	bit	1,(ix)
+	jr	z,ModeHook_RedrawRow
+	add	ix,de
+	jr	ModeHook_FindUp3
+ModeHook_RedrawRow:
+	call	ModeHook_DrawItem
+	bit	0,(ix)
+	ld	de,8
+	add	ix,de
+	jr	nz,ModeHook_RedrawRow
+	ret
+ModeHook_NotkEnter:
+
+	cp	kEOL + 1
+	jr	nc,ModeHook_BadKey
+ModeHook_RetAllow:
+	xor	a
+	ret
+
+ModeHook_BadKey:
+	push	af
+	call	ModeHook_Quit
+	pop	af
+	B_JUMP JForceCmd
+
+CursorHook:
+	db	83h
+	push	af
+	call	ModeHook_Lookup
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	inc	hl
+	ld	(curRow),de
+	pop	af
+	cp	24h
+	jr	c,ModeHook_NZ
+	call	ModeHook_DrawItem
+	jr	ModeHook_Z
+ModeHook_NZ	call	ModeHook_BlinkItem
+ModeHook_Z	call	ModeHook_HandleIndic
+	xor	a
+	ret
+
+ModeHook_HandleIndic:
+	bit	saIndic,(iy + newIndicFlags)
+	jr	z,ModeHook_UpdateIndic
+	call	ModeHook_GetIndicChar
+	jr	nz,ModeHook_UpdateIndicGo
+	B_CALL restoreTR
+	res	saIndic,(iy + newIndicFlags)
+	ret
+ModeHook_UpdateIndic:
+	call	ModeHook_GetIndicChar
+	ret	z
+	B_CALL saveTR
+	set	saIndic,(iy + newIndicFlags)
+ModeHook_UpdateIndicGo:
+	ld	hl,(curRow)
+	push	hl
+	ld	hl,0F00h
+	ld	(curRow),hl
+	call	ModeHook_GetIndicChar
+	B_CALL PutMap
+	pop	hl
+	ld	(curRow),hl
+	ret
+
+ModeHook_GetIndicChar:
+	ld	a,0E1h
+	ld	h,(iy + shiftFlags)
+	bit	3,h
+	ret	nz
+	bit	4,h
+	ret	z
+	add	a,2
+	bit	5,h
+	ret	nz
+	dec	a
+	ret
+
+ModeHook_Lookup:
+	ld	a,(97A2h)	; cur sel
+	ld	c,a
+	add	a,a
+	add	a,c
+	ld	d,0
+	ld	e,a
+	ld	hl,modeTemp
+	add	hl,de
+	add	a,c
+	add	a,a
+	ld	e,a
+	ld	ix,ModeHook_Table
+	add	ix,de
+	ret
+
+;;;;;;;;;;;;;;;;
 
 PutsApp:;PORTED
 	rst	20h
@@ -463,9 +1043,15 @@ load_equation:
 equation:
 	db EquObj, tVarEqu, tY7,0
 
+load_status_address:
+	call LookupAppVar
+	ld hl,StatusOffset
+	add hl,de
+	ret
+
 load_diftol_address:
 	call LookupAppVar
-	ld hl,2+rungeCacheSize+1
+	ld hl,DiftolOffset
 	add hl,de
 	ret
 
@@ -524,9 +1110,17 @@ appvarInitDataLength equ appvarInitDataEnd-appvarInitData
 
 AppvarInitSize 	equ rungeCacheSize+appvarInitDataLength ;runge cache is larger than euler cache
 
+DiftolOffset	equ 2+rungeCacheSize+1
+StatusOffset	equ 2+rungeCacheSize
+
+;STATUSBITS
+EulerBit		equ 0	;0=euler, 1=RK
 
 end_of_app:
 app_size equ end_of_app-4080h
 ;NOT IMPLEMENTED:support Yi* parameter
 ;NOT IMPLEMENTED:disallow y1(..) calls inside ODE's
-;NOT IMPLEMENTED:reset diftol when zoom:Zstandard (and tstep,tmax to our own values?)
+;NOT IMPLEMENTED:reset tstep,tmax to our own values when zoom:Zstandard?
+
+
+;FIX:implement expron/exproff (doesn't seem to work because A=2 isn't called with graph hook)?

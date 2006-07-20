@@ -1129,4 +1129,4 @@ runge_f4_err: ;1/8 in floating point
 ;FIX: don't loop when x0 is requested
 ;CLEANUP: don't multiply by 9 when deallocating FPS use DeallocFPS instead
 ;CLEANUP: use OP*Set* to optimize the code
-;FIX: make tolerance user choosable
+;FIX:Write code to figure out which equations to evaluate
