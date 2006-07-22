@@ -54,6 +54,7 @@ _EnableRawKeyHook 	equ 4F66h
 _EnableMenuHook		equ 5083h
 _EnableWindowHook		equ 4FB1h
 _EnableGraphHook		equ 4FB7h
+_EnableYEquHook		equ 4FCFh
 _WPutSEOL				equ 4522h
 _SetNumWindow			equ 452Bh
 
@@ -66,6 +67,17 @@ _restoreTR				equ 458Bh
 _saveTR					equ 4588h
 _cxPutAway				equ 4036h
 _POPCX					equ 49E1h
+_SetEmptyEditPtr		equ 4969h
+_OP1ToEdit				equ 49A5h
+_cxRedisp				equ 4C6Ch
+_BufClear				equ 4936h
+_UpdateYEqu				equ 49CCh
+_CursorToStart			equ 4939h
+_CursorToStart2		equ 4945h
+_OpenEditEqu			equ 49C3h
+_DispTail				equ 495Dh
+_CursorRight			equ 4942h
+
 
 StartApp:
 	in a,(6)
@@ -89,6 +101,9 @@ StartApp:
 
 	ld hl,GraphHook
 	B_CALL EnableGraphHook
+
+	ld hl,YEquHook
+	B_CALL EnableYEquHook
 
 	call create_appvar
 
@@ -191,15 +206,68 @@ set_graph_mode:
 
 app_switch_hook:
 	db 83h
-	ld b,1<<grfParamM
 	push af
+	push hl
+	ld a,b
+	cp kYequ
+	call z,app_switch_hook_ExitYEqu
+	ld b,1<<grfParamM
 	call set_graph_mode
+	pop hl
 	pop af
 	ld b,1<<grfFuncM
 	cp cxTableEditor
 	jr z,set_graph_mode;let set_graph_mode return
 	cp kFormat
 	jr z,ModeHook
+	ret
+
+app_switch_hook_ExitYEqu:
+	ld e,0
+app_switch_hook_ExitYEqu_loop:
+	push de
+	;Dis/Enable Y* function
+	call load_equation
+	rst rFINDSYM
+	ld a,(hl)
+	and 1<<5 ;the bit that dis/enables an equation
+	pop de
+	push de
+	push af
+	call load_Y_equation
+	rst rFINDSYM
+	ld a,(hl)
+	res 5,a
+	pop bc
+	or b;dis/enable equation
+	ld (hl),a
+	pop de
+	push de
+	;Update initial value
+	ld a,1
+	call load_equation2
+	AppOnErr app_switch_hook_ExitYEqu_skip
+	B_CALL ParseInp
+	AppOffErr
+	B_CALL CkOP1Real
+	jr nz,app_switch_hook_ExitYEqu_skip;don't save
+	B_CALL OP1ToOP6
+	pop de
+	push de 
+	ld a,1
+	call load_equation2
+	rst rFINDSYM
+	B_CALL SetEmptyEditPtr
+	B_CALL OP6ToOP1
+	B_CALL OP1ToEdit
+	B_CALL CloseEditEqu
+app_switch_hook_ExitYEqu_skip:
+	pop de
+	inc e
+	ld a,6;0..5
+	cp e
+	jr nz,app_switch_hook_ExitYEqu_loop
+	B_CALL CleanAll
 	ret
 
 CurTableRow equ 91DCh
@@ -249,6 +317,72 @@ GraphHook_Not6:
 GraphHook_Allow:
 	xor a
 	ret
+
+YEquHook:
+	db 83h
+	sub 06h
+	jr nz,YEquHook_Not6
+	ld a,b
+	cp kEnter;FIX: make sure this is executed no matter how the user switches equations
+	jr nz,YEquHook_Allow
+	ld a,(EQS+7)
+	bit 0,a
+	jr z,YEquHook_Allow
+	push bc
+	B_CALL CursorToStart
+	B_CALL CloseEditEqu
+
+	ld a,(EQS+7)
+	and 0Fh
+	ld e,a
+	sra e
+	and 1
+	call load_equation2
+	B_CALL ParseInp
+	B_CALL OP1ToOP6
+
+	B_CALL OpenEditEqu
+	B_CALL BufClear
+	B_CALL OP6ToOP1
+	B_CALL OP1ToEdit
+	B_CALL CloseEditEqu ;Just close and open it to make sure that all pointers are correct
+
+	B_CALL OpenEditEqu
+	B_CALL UpdateYEqu
+	pop bc
+	jr YEquHook_Allow
+YEquHook_Not6:
+	dec a
+	dec a
+	jr nz,YEquHook_Not8
+	ld a,(curCol)
+	sub 3
+	ld (curCol),a
+	ld a,"Y"
+	B_CALL PutC
+	ld a,(EQS+7)
+	ld b,a
+	srl a
+	and 00000111b
+	add Lsub1
+	bit 0,b
+	jr nz,YEquHook_YiText
+	B_CALL PutC
+	ld a,"'"
+	B_CALL PutC
+	jr YEquHook_Allow
+YEquHook_YiText:
+	push af
+	ld a,Li
+	B_CALL PutC
+	pop af
+	B_CALL PutC
+	jr YEquHook_Allow
+YEquHook_Not8:
+YEquHook_Allow:
+	xor a
+	ret
+
 
 MenuHook:;PORTED
 	db	83h
@@ -1026,14 +1160,18 @@ same_sign: ;Z if same sign of OP1 and OP2
 	ret
 
 load_yi0:
-	ld hl,load_yi0_value
-	rst rMOV9TOOP1
-	ret
-load_yi0_value:
-	db 0,80h,10h,0,0,0,0,0,0
+	ld a,1
+	call load_equation2
+	B_CALL ParseInp
+	B_CALL CkOP1Real
+	ret z
+	jr parser_hook_argument_error
 
 load_equation:
-	ld a,e
+	xor a
+load_equation2:
+	add e
+	add e;a+=2*e
 	ld hl,equation
 	rst rMOV9TOOP1
 	ld hl,OP1+2
@@ -1041,7 +1179,16 @@ load_equation:
 	ld (hl),a
 	ret
 equation:
-	db EquObj, tVarEqu, tY7,0
+	db EquObj, tVarEqu, tX1T,0
+
+load_Y_equation:
+	ld a,tY1
+	add e
+	ld hl,equation
+	rst rMOV9TOOP1
+	ld (OP1+2),a
+	ret
+	
 
 load_status_address:
 	call LookupAppVar
@@ -1118,9 +1265,9 @@ EulerBit		equ 0	;0=euler, 1=RK
 
 end_of_app:
 app_size equ end_of_app-4080h
-;NOT IMPLEMENTED:support Yi* parameter
 ;NOT IMPLEMENTED:disallow y1(..) calls inside ODE's
 ;NOT IMPLEMENTED:reset tstep,tmax to our own values when zoom:Zstandard?
+;NOT IMPLEMENTED: Evaluate Y*T values and store the results instead of the formula
+;NOT IMPLEMENTED: modify vars menu to disallow certain equations
 
-
-;FIX:implement expron/exproff (doesn't seem to work because A=2 isn't called with graph hook)?
+;FIX:implement expron/exproff? (problems with either putting it on top of equ nr in upper right corner or disappearing)

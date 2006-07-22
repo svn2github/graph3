@@ -1098,14 +1098,21 @@ runge_count_equations_loop:
 	ret
 
 runge_load_y0:
-	call runge_count_equations
-	ld b,a
-$$:
-	push bc
+	rlc d;skip first two bits
+	rlc d
+	ld e,5
+runge_load_y0_loop:
+	rlc d
+	jr nc,runge_load_y0_skip
+	push de
 	call load_yi0
 	rst rPUSHREALO1
-	pop bc
-	djnz $b
+	pop de
+runge_load_y0_skip:
+	dec e
+	ld a,-1;0..5 are the equations
+	cp e
+	jr nz,runge_load_y0_loop
 	ret
 
 runge_f1_inc: ;2/9 in floating point
@@ -1130,3 +1137,4 @@ runge_f4_err: ;1/8 in floating point
 ;CLEANUP: don't multiply by 9 when deallocating FPS use DeallocFPS instead
 ;CLEANUP: use OP*Set* to optimize the code
 ;FIX:Write code to figure out which equations to evaluate
+;FIX:report error when stepsize gets too small
