@@ -69,17 +69,15 @@ _cxPutAway				equ 4036h
 _POPCX					equ 49E1h
 _SetEmptyEditPtr		equ 4969h
 _OP1ToEdit				equ 49A5h
-_cxRedisp				equ 4C6Ch
 _BufClear				equ 4936h
 _UpdateYEqu				equ 49CCh
-_CursorToStart			equ 4939h
-_CursorToStart2		equ 4945h
+_CursorToStart			equ 4939h;4945h
 _OpenEditEqu			equ 49C3h
-_DispTail				equ 495Dh
-_CursorRight			equ 4942h
-
+_CursorDown				equ 4948h
 
 StartApp:
+	call CreateYEquations
+
 	in a,(6)
 	ld hl,parser_hook
 	B_CALL EnableParserHook
@@ -111,6 +109,7 @@ StartApp:
 
 parser_hook:
 	db 83h
+	call SetCalcSpeed
 	or a
 	jr z,parser_hook_return;preparser
 	push hl
@@ -172,6 +171,7 @@ execute_diffequ_algorithm_RK:
 
 regraph_hook:
 	db 83h
+	call SetCalcSpeed
 	cp 08h
 	jr nz,regraph_hook_return
 	
@@ -206,6 +206,7 @@ set_graph_mode:
 
 app_switch_hook:
 	db 83h
+	call SetCalcSpeed
 	push af
 	push hl
 	ld a,b
@@ -275,6 +276,7 @@ CurTableCol equ 91DDh
 
 raw_key_hook:
 	db 83h
+	call SetCalcSpeed
 	push af
 	ld a,(cxCurApp)
 	cp cxTableEditor
@@ -301,6 +303,7 @@ raw_key_hook_ignore_key:
 
 GraphHook:
 	db 83h
+	call SetCalcSpeed
 GraphHook_Not2:
 	cp 06h
 	jr nz,GraphHook_Not6
@@ -320,14 +323,38 @@ GraphHook_Allow:
 
 YEquHook:
 	db 83h
+	call SetCalcSpeed
 	sub 06h
 	jr nz,YEquHook_Not6
-	ld a,b
-	cp kEnter;FIX: make sure this is executed no matter how the user switches equations
-	jr nz,YEquHook_Allow
 	ld a,(EQS+7)
 	bit 0,a
-	jr z,YEquHook_Allow
+	jr z,YEquHook_Allow;only do something when Y*T equations are selected
+	bit 0,(IY+19)
+	jr nz,YEquHook_Allow;Don't do anything when = is selected
+	;The graphing style icon is protected because we immediately abort when X*T is edited
+	ld a,b
+	cp kEnter
+	jr z,YEquHook_Evaluate
+	cp kLeft
+	jr z,YEquHook_CheckStart
+	cp kUp
+	jr z,YEquHook_CheckStart
+	cp kDown
+	jr z,YEquHook_CheckDown
+	jr YEquHook_Allow
+YEquHook_CheckDown:
+	B_CALL CursorDown
+	ld b,kEnter
+	jr z,YEquHook_Evaluate
+	or 0FFh
+	ret
+YEquHook_CheckStart:
+	ld hl,(editTop)
+	ld de,(editCursor)
+	or a
+	sbc hl,de
+	jr nz,YEquHook_Allow
+YEquHook_Evaluate:
 	push bc
 	B_CALL CursorToStart
 	B_CALL CloseEditEqu
@@ -386,6 +413,7 @@ YEquHook_Allow:
 
 MenuHook:;PORTED
 	db	83h
+	call SetCalcSpeed
 	or	a
 	jr	nz,MenuHook_Not0
 	ld	a,(MenuCurrent)
@@ -414,6 +442,7 @@ CalcMenu:;PORTED
 
 WindowHook:;PORTED
 	db 83h
+	call SetCalcSpeed
 	push	af
 	ld	a,(cxCurApp)
 	cp	kWindow
@@ -970,6 +999,8 @@ ModeHook_NotClear:
 	set graphDraw,(IY+graphFlags)
 	dec a
 	jr z,ModeHook_DontReset
+	;invalidate table cache
+	set reTable,(IY+tblFlags)
 	;erase cache when needed
 	push hl
 	push de
@@ -1023,6 +1054,7 @@ ModeHook_BadKey:
 
 CursorHook:
 	db	83h
+	call SetCalcSpeed
 	push	af
 	call	ModeHook_Lookup
 	ld	e,(hl)
@@ -1140,6 +1172,62 @@ Exists:
 	jr z,NotArchived
 	B_CALL Arc_Unarc
 NotArchived:
+	ret
+
+CreateYEquations:
+	ld e,0
+CreateYEquations_Loop:
+	push de
+	ld hl,equation
+	rst rMOV9TOOP1
+	ld a,tY1
+	pop de
+	push de
+	add e
+	ld (OP1+2),a
+	rst rFINDSYM
+	B_CALL DelVar
+	ld hl,YEquationSize
+	B_CALL CreateEqu
+	inc de
+	inc de
+	ld hl,YEquation
+	ld bc,YEquationSize-1
+	ldir
+	ex de,hl
+	pop de
+	push de
+	ld a,t0
+	add e
+	ld (hl),a
+	pop de
+	inc e
+	ld a,6;0..5
+	cp e
+	jr nz,CreateYEquations_Loop
+	ret
+YEquation:
+	db t2ByteTok,tReal,t3,t4,tComma
+YEquationEnd:
+YEquationSize	equ YEquationEnd-YEquation+1
+
+SetCalcSpeed:
+	push	af
+	push	bc
+	B_CALL GetBaseVer
+	cp	2
+	jr	nc,SetCalcSpeed_above112
+	cp	1
+	jr	nz,SetCalcSpeed_below112
+	ld	a,b
+	cp	13
+	jr	c,SetCalcSpeed_below112
+SetCalcSpeed_above112:
+	ld	a,0FFh
+	B_CALL	SetExSpeed
+SetCalcSpeed_below112:
+	pop	bc
+	pop	af
 	ret
 
 LookupAppVar:;PORTED
@@ -1267,7 +1355,11 @@ end_of_app:
 app_size equ end_of_app-4080h
 ;NOT IMPLEMENTED:disallow y1(..) calls inside ODE's
 ;NOT IMPLEMENTED:reset tstep,tmax to our own values when zoom:Zstandard?
-;NOT IMPLEMENTED: Evaluate Y*T values and store the results instead of the formula
 ;NOT IMPLEMENTED: modify vars menu to disallow certain equations
-
+;FIX:Redirect errors when ON:BREAK is raised in Y*
 ;FIX:implement expron/exproff? (problems with either putting it on top of equ nr in upper right corner or disappearing)
+;FIX: Save equations/system variables/settings that will be overwritten
+
+;Y= Screen (might change
+;* Use only one line to display result, followed by ...
+;* When switching away make errors behave like the window screen
