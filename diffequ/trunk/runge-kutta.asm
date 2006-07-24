@@ -1,5 +1,10 @@
 runge:
-	ld d,2+1
+	push de
+	call LookupAppVar
+	ld hl,RKEvalOffset
+	add hl,de
+	pop de
+	ld d,(hl)
 	push de
 	call RclT
 	rst rPUSHREALO1;save X
@@ -1133,8 +1138,7 @@ runge_f4_err: ;1/8 in floating point
 
 ;FIX: invalidate simple cache when raising error
 ;FIX: change endpoint cache so that we know when the cache contains the start and end of an rk-step (invalidate if not?)
-;FIX: don't loop when x0 is requested
+;CLEANUP: don't loop when x0 is requested
 ;CLEANUP: don't multiply by 9 when deallocating FPS use DeallocFPS instead
 ;CLEANUP: use OP*Set* to optimize the code
-;FIX:Write code to figure out which equations to evaluate
 ;FIX:report error when stepsize gets too small

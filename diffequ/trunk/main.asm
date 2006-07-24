@@ -74,9 +74,18 @@ _UpdateYEqu				equ 49CCh
 _CursorToStart			equ 4939h;4945h
 _OpenEditEqu			equ 49C3h
 _CursorDown				equ 4948h
+_IsA2ByteTok			equ 42A3h
+
+GX1						equ 9780h
 
 StartApp:
-	call CreateYEquations
+	call create_appvar
+
+	B_CALL GetKey
+	cp kEnter
+	jr z,Restore
+
+	call SetupCalc
 
 	in a,(6)
 	ld hl,parser_hook
@@ -103,8 +112,10 @@ StartApp:
 	ld hl,YEquHook
 	B_CALL EnableYEquHook
 
-	call create_appvar
+	B_JUMP JForceCmdNoChar
 
+Restore:
+	call RestoreCalc
 	B_JUMP JForceCmdNoChar
 
 parser_hook:
@@ -269,7 +280,87 @@ app_switch_hook_ExitYEqu_skip:
 	cp e
 	jr nz,app_switch_hook_ExitYEqu_loop
 	B_CALL CleanAll
+	;figure out which equations need to be evaluated in RK mode
+	ld de,0
+app_switch_hook_ExitYEqu_loop2:
+	push de
+	call load_equation
+	rst rFINDSYM
+	bit 5,(hl)
+	ex de,hl
+	pop de
+	call nz,app_switch_hook_ExitYEqu_CheckEqu
+	inc e
+	ld a,6;0..5
+	cp e
+	jr nz,app_switch_hook_ExitYEqu_loop2
+	;store which equations need to be evaluated in RK mode
+	push de
+	call LookupAppVar 
+	ld hl,RKEvalOffset
+	add hl,de
+	pop de
+	ld (hl),d
 	ret
+
+app_switch_hook_ExitYEqu_CheckEqu:
+	push de
+	ld a,1
+	inc e
+app_switch_hook_ExitYEqu_CheckEquLoop:
+	dec e
+	jr z,app_switch_hook_ExitYEqu_CheckEquSkip
+	sla a
+	jr app_switch_hook_ExitYEqu_CheckEquLoop
+app_switch_hook_ExitYEqu_CheckEquSkip:
+	pop de
+	ld b,a
+	and d
+	ret nz;already checked
+	ld a,d
+	or b
+	ld d,a
+	ld c,(hl)
+	inc hl
+	ld b,(hl)
+	inc hl
+app_switch_hook_ExitYEqu_CheckEquLoop2:
+	ld a,b
+	or c
+	ret z
+	ld a,(hl)
+	cp tVarEqu
+	jr nz,app_switch_hook_ExitYEqu_CheckEquNotEqu
+	inc hl
+	ld a,(hl)
+	sub tY1
+	jr c,app_switch_hook_ExitYEqu_CheckEquNotY
+	cp 6
+	jr nc,app_switch_hook_ExitYEqu_CheckEquNotY
+	;Found Y1..Y6 token
+	push bc
+	push hl
+	ld e,a;D hasn't changed
+	push de
+	call load_equation
+	rst rFINDSYM
+	ex de,hl
+	pop de
+	call app_switch_hook_ExitYEqu_CheckEqu
+	pop hl
+	pop bc
+app_switch_hook_ExitYEqu_CheckEquNotY:
+	dec hl
+	ld a,(hl)
+app_switch_hook_ExitYEqu_CheckEquNotEqu:
+	B_CALL IsA2ByteTok
+	inc hl
+	dec bc
+	jr nz,$f
+	inc hl
+	dec bc
+$$:
+	jr app_switch_hook_ExitYEqu_CheckEquLoop2
 
 CurTableRow equ 91DCh
 CurTableCol equ 91DDh
@@ -324,14 +415,38 @@ GraphHook_Allow:
 YEquHook:
 	db 83h
 	call SetCalcSpeed
-	sub 06h
+	sub 05h
+	jr nz,YEquHook_Not5
+	ld a,(EQS+7)
+	and 0Fh
+	sra a
+	ld b,1
+	inc a
+$$:
+	dec a
+	jr z,$f
+	sla b
+	jr $b
+$$:
+	push bc
+	call LookupAppVar
+	ld hl,RKEvalOffset
+	add hl,de
+	ld a,(hl)
+	pop bc
+	and b
+	jr z,YEquHook_Allow
+	B_CALL SetTblGraphDraw
+	jr YEquHook_Allow
+YEquHook_Not5:
+	dec a
 	jr nz,YEquHook_Not6
 	ld a,(EQS+7)
 	bit 0,a
 	jr z,YEquHook_Allow;only do something when Y*T equations are selected
 	bit 0,(IY+19)
 	jr nz,YEquHook_Allow;Don't do anything when = is selected
-	;The graphing style icon is protected because we immediately abort when X*T is edited
+	;The graphing style icon is never selected here because we immediately abort when X*T is edited
 	ld a,b
 	cp kEnter
 	jr z,YEquHook_Evaluate
@@ -1166,6 +1281,9 @@ create_appvar:;PORTED
 	ld hl,appvarInitData
 	ld bc,appvarInitDataLength
 	ldir
+	ex de,hl
+	ld bc,appVarGraphStylesLength+appVarInitEquationsLength
+	B_CALL MemClear
 Exists:
 	ld a,b
 	or a
@@ -1174,9 +1292,9 @@ Exists:
 NotArchived:
 	ret
 
-CreateYEquations:
+CreateEquations:
 	ld e,0
-CreateYEquations_Loop:
+CreateEquations_Loop:
 	push de
 	ld hl,equation
 	rst rMOV9TOOP1
@@ -1185,8 +1303,6 @@ CreateYEquations_Loop:
 	push de
 	add e
 	ld (OP1+2),a
-	rst rFINDSYM
-	B_CALL DelVar
 	ld hl,YEquationSize
 	B_CALL CreateEqu
 	inc de
@@ -1204,12 +1320,235 @@ CreateYEquations_Loop:
 	inc e
 	ld a,6;0..5
 	cp e
-	jr nz,CreateYEquations_Loop
+	jr nz,CreateEquations_Loop
+	call load_equ_address
+	ld c,tX1T
+CreateEquations_Loop2:
+	push bc
+	push hl
+	ld hl,equation
+	rst rMOV9TOOP1
+
+	pop hl
+	pop bc
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl
+	push bc
+	push de
+	push hl
+
+	ld a,c
+	ld (OP1+2),a
+	ex de,hl
+	B_CALL CreateEqu 
+	inc de
+	inc de
+
+	pop hl
+	pop bc
+	push bc
+	push hl
+	ld a,b
+	or c
+	jr z,$f
+	ldir
+$$:
+
+	pop hl
+	pop de
+	dec hl
+	dec hl
+	inc de
+	inc de;size bytes
+	push hl
+	B_CALL DelMem
+	pop hl
+
+	pop bc
+	inc c
+	ld a,tY6T+1
+	cp c
+	jr nz,CreateEquations_Loop2
+	call LookupAppVar
+	ex de,hl
+	ld de,AppvarInitSize-appVarInitEquationsLength
+	ld (hl),e
+	inc hl
+	ld (hl),d
 	ret
 YEquation:
 	db t2ByteTok,tReal,t3,t4,tComma
 YEquationEnd:
 YEquationSize	equ YEquationEnd-YEquation+1
+
+SetupCalc:
+	call create_appvar
+	call load_status_address
+	;Save bits
+	set SimultBit,(hl)
+	bit grfSimul,(IY+grfDBFlags)
+	jr nz,$f
+	res SimultBit,(hl)
+$$:
+	set ExprBit,(hl)
+	bit 0,(IY+24)
+	jr nz,$f
+	res ExprBit,(hl)
+$$:
+	;save Graphing styles
+	call load_style_address
+	ex de,hl
+	ld hl,GX1
+	ld bc,6
+	ldir
+	call SaveEquations
+	call CreateEquations
+	ret
+
+RestoreCalc:
+	xor a
+	ld (IY+35h),a
+	ld (IY+36h),a;disable hooks
+	call SaveParamEquations;FIX: should copy equations to appvar
+	call DeleteEquations
+	call RestoreEquations
+	ld b,1<<grfFuncM
+	call set_graph_mode
+	call load_status_address
+	bit SimultBit,(hl);Simultaneous mode is enabled
+	jr nz,$f
+	res grfSimul,(IY+grfDBFlags)
+$$:
+	bit ExprBit,(hl);ExprOff bit is enabled
+	jr nz,$f
+	res 0,(IY+24)
+$$:
+	;restore Graphing style 9780..9786 GX1..GX1+5
+	call load_style_address
+	ld de,GX1
+	ld bc,6
+	ldir
+	ret
+
+SaveParamEquations:;FIX:restore hooks instead of deleting them
+	call load_equ_address
+	push hl
+	ld hl,equation
+	rst rMOV9TOOP1
+	pop de
+	ld c,tX1T
+
+SaveParamEquations_Loop:;FIX:finish routine
+	push bc
+	push de
+	ld a,c
+	ld (OP1+2),a
+	rst rFINDSYM
+	ex de,hl
+
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	dec hl
+	ex (sp),hl
+	push hl
+	ex de,hl
+	B_CALL EnoughMem
+	jr c,SaveParamEquations_Exit
+	ex de,hl
+	pop de
+	B_CALL InsertMem
+	pop bc
+	ret
+
+SaveParamEquations_Exit:
+;FIX!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Appvar will be in invalid state when this label is reached!
+
+DeleteEquations:
+	ld hl,equation
+	rst rMOV9TOOP1
+	ld a,tY1
+	ld (OP1+2),a
+DeleteEquations_Loop:
+	rst rFINDSYM
+	B_CALL DelVar
+	ld hl,OP1+2
+	inc (hl)
+	ld a,(hl)
+	cp tY6+1
+	jr nz,DeleteEquations_Loop
+	ld a,tX1T
+	ld (OP1+2),a
+DeleteEquations_Loop2:
+	rst rFINDSYM
+	B_CALL DelVar
+	ld hl,OP1+2
+	inc (hl)
+	ld a,(hl)
+	cp tY6T+1
+	jr nz,DeleteEquations_Loop2
+	ret
+
+SaveEquations:
+	ld c,tY1
+SaveEquations_Loop1:
+	ld a,c
+	add 10;Y1->Y0+1
+	ld b,a
+	call RenameEquation
+	inc c
+	ld a,tY6+1
+	cp c
+	jr nz,SaveEquations_Loop1
+	ld c,tX1T
+SaveEquations_Loop2:
+	ld a,c
+	add twn-tX1T+1;X1T->w(n)+1
+	ld b,a
+	call RenameEquation
+	inc c
+	ld a,tY6T+1
+	cp c
+	jr nz,SaveEquations_Loop2
+	ret
+
+RestoreEquations:
+	ld c,tY1+10
+RestoreEquations_Loop1:
+	ld a,c
+	sub 10;Y1<-Y0+1
+	ld b,a
+	call RenameEquation
+	inc c
+	ld a,tY6+10
+	cp c
+	jr nz,RestoreEquations_Loop1
+	ld c,twn+1 
+RestoreEquations_Loop2:
+	ld a,c
+	sub twn-tX1T+1;X1T<-w(n)+1
+	ld b,a
+	call RenameEquation
+	inc c
+	ld a,tY6T-tX1T+twn+1
+	cp c
+	jr nz,RestoreEquations_Loop2
+	ret
+
+RenameEquation:;C=original name B=new name
+	push bc
+	ld a,c
+	ld hl,equation
+	rst rMOV9TOOP1
+	ld (OP1+2),a
+	rst rFINDSYM
+	ld de,-7
+	add hl,de
+	pop bc
+	ld (hl),b
+	ret
 
 SetCalcSpeed:
 	push	af
@@ -1277,6 +1616,17 @@ load_Y_equation:
 	ld (OP1+2),a
 	ret
 	
+load_equ_address:
+	call LookupAppVar
+	ld hl,EquOffset
+	add hl,de
+	ret
+
+load_style_address:
+	call LookupAppVar
+	ld hl,StyleOffset
+	add hl,de
+	ret
 
 load_status_address:
 	call LookupAppVar
@@ -1333,23 +1683,35 @@ cache2ValidMask				equ 1<<cache2ValidBit
 
 appvarInitData:
 	db 0;statusbits
+	db 0;equations to be evaluated in RK mode
 appvarInitDataDiftol:
 	db 00h,7Dh,10h,00h,00h,00h,00h,00h,00h ;.001 diftol
 appvarInitDataEnd:
 appvarInitDataLength equ appvarInitDataEnd-appvarInitData
 
+appVarGraphStylesLength		equ 6
+appVarInitEquationsLength	equ 6*2*2
+
 ;APPVAR
-;0..316		Cache (size of runge cache)
-;317			Statusbits
-;318..326	Diftol
+;316		Cache (size of runge cache)
+;1			Statusbits
+;1			Equations to be evaluated in RK mode
+;9			Diftol
+;6			Graph style of X*T
+;?			equations
 
-AppvarInitSize 	equ rungeCacheSize+appvarInitDataLength ;runge cache is larger than euler cache
+AppvarInitSize 	equ rungeCacheSize+appvarInitDataLength+appVarGraphStylesLength+appVarInitEquationsLength ;runge cache is larger than euler cache
 
-DiftolOffset	equ 2+rungeCacheSize+1
 StatusOffset	equ 2+rungeCacheSize
+RKEvalOffset	equ 2+rungeCacheSize+1
+DiftolOffset	equ 2+rungeCacheSize+2
+StyleOffset		equ 2+rungeCacheSize+2+9
+EquOffset		equ 2+rungeCacheSize+2+9+appVarGraphStylesLength
 
 ;STATUSBITS
 EulerBit		equ 0	;0=euler, 1=RK
+SimultBit	equ 6 ;Copy of the simultaneous/sequential bit
+ExprBit		equ 7 ;Copy of the ExprOn/Off bit
 
 end_of_app:
 app_size equ end_of_app-4080h
@@ -1359,7 +1721,10 @@ app_size equ end_of_app-4080h
 ;FIX:Redirect errors when ON:BREAK is raised in Y*
 ;FIX:implement expron/exproff? (problems with either putting it on top of equ nr in upper right corner or disappearing)
 ;FIX: Save equations/system variables/settings that will be overwritten
+;FIX: invalidate cache when functions, initial values or settings(tstep,tmin) are changed
+;CLEANUP: Use variable used during graphing to support smart graph
+;FIX: When memory is full, calc should not be left in illegal state (createEquations for example)
 
-;Y= Screen (might change
+;Y= Screen (might change)
 ;* Use only one line to display result, followed by ...
 ;* When switching away make errors behave like the window screen
