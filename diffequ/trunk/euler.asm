@@ -3,13 +3,16 @@
 ;X0		<-> Tmin
 ;Xmax		<-> Tmax
 ;Xstep	<-> Tstep
-;y*		<-> y*		(y7..y0 now for 1..4)
-;yi*		<-> -			(new variable, equals 1 now)
+;y*		<-> X*T
+;yi*		<-> Y*T
 
 euler:
 	push de
 	call RclT
 	rst rPUSHREALO1;save X
+	pop ix
+	AppOnErr euler_errorhandler
+	push ix
 	rst rOP1TOOP2
 	ld a,X0
 	B_CALL RclSysTok
@@ -210,11 +213,19 @@ euler_loop_skip:
 
 euler_skip_final:
 	B_CALL PopRealO2
+	pop de
+	AppOffErr
 	B_CALL PopRealO1
 	call StoT
 	B_CALL OP2ToOP1
-	pop de
 	ret
+
+euler_errorhandler:
+	push af
+	B_CALL PopRealO1
+	call StoT
+	pop af
+	B_JUMP JError
 
 euler_check_cache:;checks whether using the cache is usefull
 	;E contains equ number

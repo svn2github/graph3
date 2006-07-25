@@ -77,12 +77,13 @@ _CursorDown				equ 4948h
 _IsA2ByteTok			equ 42A3h
 
 GX1						equ 9780h
+YEquHookState			equ 9B98h+3
 
 StartApp:
 	call create_appvar
 
-	B_CALL GetKey
-	cp kEnter
+	ld a,(YEquHookState)
+	cp 42h
 	jr z,Restore
 
 	call SetupCalc
@@ -174,7 +175,7 @@ execute_diffequ_algorithm:
 	call euler
 	or 0FFh
 	ret
-	
+
 execute_diffequ_algorithm_RK:
 	call runge
 	or 0FFh
@@ -185,7 +186,8 @@ regraph_hook:
 	call SetCalcSpeed
 	cp 08h
 	jr nz,regraph_hook_return
-	
+
+	AppOnErr regraph_hook_error
 	ld a,(OP1+2)
 	;X*t is even
 	;Y*t is odd
@@ -195,15 +197,33 @@ regraph_hook:
 	and 07h
 	ld e,a
 	call execute_diffequ_algorithm
+	AppOffErr
 	jr regraph_hook_return_NZ
 regraph_hook_X:;just return T (already in OP1)
+	set numOP1,(IY+ParsFlag2)
 	call RclT
+	AppOffErr
 regraph_hook_return_NZ:
 	or 0FFh
 	ret
 
 regraph_hook_return:
 	xor a
+	ret
+
+regraph_hook_error:
+	res write_on_graph,(IY+sGrFlags)
+	res numOP1,(IY+ParsFlag2)
+	ld b,a
+	and 7Fh
+	cp 8 ;only ignore teh first errors
+	jr c,regraph_hook_error_return
+	ld a,b
+	B_JUMP JError
+regraph_hook_error_return:
+	ld hl,equation
+	rst rMOV9TOOP1
+	or 0FFh
 	ret
 
 set_graph_mode:
@@ -238,7 +258,7 @@ app_switch_hook_ExitYEqu:
 	ld e,0
 app_switch_hook_ExitYEqu_loop:
 	push de
-	;Dis/Enable Y* function
+	;Dis/Enable Y* function	re
 	call load_equation
 	rst rFINDSYM
 	ld a,(hl)
@@ -532,15 +552,27 @@ MenuHook:;PORTED
 	or	a
 	jr	nz,MenuHook_Not0
 	ld	a,(MenuCurrent)
+	cp 0Bh ;Vars-menu
+	jr z,MenuHook_ReplaceVarsMenu
 	cp	39h ;Calc Menu (parametric mode)
-	jr	z,MenuHook_ReplaceMenu
-	cp 11h
+	jr	z,MenuHook_ReplaceCalcMenu
+	cp 11h ;Calc Menu (function mode)
+	jr z,MenuHook_ReplaceCalcMenu
+	cp 1Bh ;Function-Menu
 	jr nz,MenuHook_Allow
+MenuHook_ReplaceFunctionMenu:
+	ld hl,YEquMenu
+	jr MenuHook_ReplaceMenu
+MenuHook_ReplaceVarsMenu:
+	ld hl,VarsMenu
+	jr MenuHook_ReplaceMenu
+MenuHook_ReplaceCalcMenu:
+	ld hl,CalcMenu
 MenuHook_ReplaceMenu:
-	ld	hl,CalcMenu
 	ld	de,tempSwapArea
+	ld bc,25;longest menu implemented
 	push	de
-	call	Mov9
+	ldir
 	pop	hl
 	or	0FFh
 	ret
@@ -554,6 +586,34 @@ CalcMenu:;PORTED
 	db 1 	;how many choices under 1st header?
 	db 24h	;string table entry for "CALCULATE"
 	db 0,kEval ;these are 2-byte keypresses of each entry
+
+VarsMenu:;25 bytes long
+	db 2		;how many headers?
+	db 7 	;how many choices under 1st header?
+	db 3  ;how many choices under 2nd header?
+	db 5Ah	;string table entry for "VARS"
+	db 5Dh	;string table entry for "Y-VARS"
+	db 82h,3Eh ;these are 2-byte keypresses of each entry
+	db 82h,3Fh
+	db 82h,40h
+	db 82h,41h
+	db 82h,43h
+	db 82h,44h
+	db 82h,42h
+	db 82h,45h;second header
+	db 82h,47h
+	db 82h,48h
+
+YEquMenu:
+	db 1		;how many headers?
+	db 6 	;how many choices under 1st header?
+	db 30h	;string table entry for "FUNCTION"
+	db kExtendEcho2,kY1 ;these are 2-byte keypresses of each entry
+	db kExtendEcho2,kY2
+	db kExtendEcho2,kY3
+	db kExtendEcho2,kY4
+	db kExtendEcho2,kY5
+	db kExtendEcho2,kY6
 
 WindowHook:;PORTED
 	db 83h
@@ -1321,50 +1381,63 @@ CreateEquations_Loop:
 	ld a,6;0..5
 	cp e
 	jr nz,CreateEquations_Loop
-	call load_equ_address
+	ld hl,EquOffset
 	ld c,tX1T
 CreateEquations_Loop2:
 	push bc
 	push hl
+	
+	call LookupAppVar
+	push de
 	ld hl,equation
 	rst rMOV9TOOP1
+	pop de
 
 	pop hl
 	pop bc
+	push bc
+	push hl
+	add hl,de
 	ld e,(hl)
 	inc hl
 	ld d,(hl)
-	inc hl
-	push bc
-	push de
-	push hl
 
 	ld a,c
 	ld (OP1+2),a
 	ex de,hl
-	B_CALL CreateEqu 
+	B_CALL CreateEqu
 	inc de
 	inc de
 
-	pop hl
+	push de
+	call LookupAppVar ;stack=[equ_data,appvar_offset,current_equation,...]
+	ex de,hl
+	pop de
+
 	pop bc
 	push bc
+	add hl,bc
+	ld c,(hl)
+	ld (hl),0
+	inc hl
+	ld b,(hl)
+	ld (hl),0
+	inc hl
 	push hl
+	push bc
 	ld a,b
 	or c
 	jr z,$f
 	ldir
 $$:
 
-	pop hl
 	pop de
-	dec hl
-	dec hl
-	inc de
-	inc de;size bytes
-	push hl
-	B_CALL DelMem
 	pop hl
+	B_CALL DelMem
+
+	pop hl
+	inc hl
+	inc hl ;new offset
 
 	pop bc
 	inc c
@@ -1373,7 +1446,7 @@ $$:
 	jr nz,CreateEquations_Loop2
 	call LookupAppVar
 	ex de,hl
-	ld de,AppvarInitSize-appVarInitEquationsLength
+	ld de,AppvarInitSize
 	ld (hl),e
 	inc hl
 	ld (hl),d
@@ -1384,6 +1457,8 @@ YEquationEnd:
 YEquationSize	equ YEquationEnd-YEquation+1
 
 SetupCalc:
+	ld a,42h
+	ld (YEquHookState),a
 	call create_appvar
 	call load_status_address
 	;Save bits
@@ -1404,14 +1479,28 @@ $$:
 	ld bc,6
 	ldir
 	call SaveEquations
+	AppOnErr SetupCalc_Error
 	call CreateEquations
+	AppOffErr
+	call EnableEquations
 	ret
 
+SetupCalc_Error:;Memory is full, error during CreateEqu
+	push af
+	call RestoreCalc_NoSave
+	pop af
+	res 7,a
+	B_JUMP JError
+	
+
 RestoreCalc:
+	call SaveParamEquations
+	call SaveEnabledEquations
+RestoreCalc_NoSave:
 	xor a
-	ld (IY+35h),a
+	ld (IY+35h),a;FIX:restore hooks instead of deleting them
 	ld (IY+36h),a;disable hooks
-	call SaveParamEquations;FIX: should copy equations to appvar
+	ld (YEquHookState),a;not in diffequ mode anymore
 	call DeleteEquations
 	call RestoreEquations
 	ld b,1<<grfFuncM
@@ -1432,15 +1521,74 @@ $$:
 	ldir
 	ret
 
-SaveParamEquations:;FIX:restore hooks instead of deleting them
+SaveEnabledEquations:
+	ld hl,equation
+	rst rMOV9TOOP1
+	ld b,0
+	ld c,tX6T
+SaveEnabledEquations_Loop:
+	rlc b
+	ld a,c
+	ld (OP1+2),a
+	push bc
+	rst rFINDSYM
+	pop bc
+	bit 5,(hl)
+	jr z,$f
+	set 0,b
+$$:
+	dec c
+	dec c
+	ld a,tX1T-2
+	cp c
+	jr nz,SaveEnabledEquations_Loop
+	push bc
+	call LookupAppVar
+	ld hl,EnabledOffset
+	add hl,de
+	pop bc
+	ld (hl),b
+	ret
+
+EnableEquations:
+	call LookupAppVar
+	ld hl,EnabledOffset
+	add hl,de
+	ld b,(hl)
+	ld c,tX1T
+	push bc
+	ld hl,equation
+	rst rMOV9TOOP1
+	pop bc
+EnableEquations_Loop:
+	push bc
+	ld a,c
+	ld (OP1+2),a
+	rst rFINDSYM
+	pop bc
+	set 5,(hl)
+	bit 0,b
+	jr nz,$f
+	res 5,(hl)
+$$:
+	bit 0,c
+	jr z,$f
+	rrc b
+$$:
+	inc c
+	ld a,tY6T+1
+	cp c
+	jr nz,EnableEquations_Loop
+	ret
+
+SaveParamEquations:
 	call load_equ_address
 	push hl
 	ld hl,equation
 	rst rMOV9TOOP1
 	pop de
 	ld c,tX1T
-
-SaveParamEquations_Loop:;FIX:finish routine
+SaveParamEquations_Loop:
 	push bc
 	push de
 	ld a,c
@@ -1451,20 +1599,34 @@ SaveParamEquations_Loop:;FIX:finish routine
 	ld e,(hl)
 	inc hl
 	ld d,(hl)
-	dec hl
-	ex (sp),hl
-	push hl
 	ex de,hl
-	B_CALL EnoughMem
+	B_CALL EnoughMem ;HL=amount of ram
 	jr c,SaveParamEquations_Exit
 	ex de,hl
 	pop de
-	B_CALL InsertMem
+	push de
+	push hl
+	B_CALL InsertMem ;HL=bytes to insert DE=location
+
+	rst rFINDSYM
+	ex de,hl
 	pop bc
+	pop de
+	inc bc
+	inc bc;size bytes
+	ldir
+	pop bc
+	inc c
+	ld a,tY6T+1
+	cp c
+	jr nz,SaveParamEquations_Loop
 	ret
 
 SaveParamEquations_Exit:
-;FIX!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Appvar will be in invalid state when this label is reached!
+	;Not enough memory,just stop saving equations
+	pop bc
+	pop bc
+	ret
 
 DeleteEquations:
 	ld hl,equation
@@ -1473,7 +1635,9 @@ DeleteEquations:
 	ld (OP1+2),a
 DeleteEquations_Loop:
 	rst rFINDSYM
+	jr c,$f
 	B_CALL DelVar
+$$:
 	ld hl,OP1+2
 	inc (hl)
 	ld a,(hl)
@@ -1483,7 +1647,9 @@ DeleteEquations_Loop:
 	ld (OP1+2),a
 DeleteEquations_Loop2:
 	rst rFINDSYM
+	jr c,$f
 	B_CALL DelVar
+$$:
 	ld hl,OP1+2
 	inc (hl)
 	ld a,(hl)
@@ -1522,7 +1688,7 @@ RestoreEquations_Loop1:
 	ld b,a
 	call RenameEquation
 	inc c
-	ld a,tY6+10
+	ld a,tY6+10+1
 	cp c
 	jr nz,RestoreEquations_Loop1
 	ld c,twn+1 
@@ -1532,7 +1698,7 @@ RestoreEquations_Loop2:
 	ld b,a
 	call RenameEquation
 	inc c
-	ld a,tY6T-tX1T+twn+1
+	ld a,tY6T-tX1T+twn+2
 	cp c
 	jr nz,RestoreEquations_Loop2
 	ret
@@ -1684,6 +1850,7 @@ cache2ValidMask				equ 1<<cache2ValidBit
 appvarInitData:
 	db 0;statusbits
 	db 0;equations to be evaluated in RK mode
+	db 0;equations that are enabled
 appvarInitDataDiftol:
 	db 00h,7Dh,10h,00h,00h,00h,00h,00h,00h ;.001 diftol
 appvarInitDataEnd:
@@ -1696,6 +1863,7 @@ appVarInitEquationsLength	equ 6*2*2
 ;316		Cache (size of runge cache)
 ;1			Statusbits
 ;1			Equations to be evaluated in RK mode
+;1			Equations that are enabled
 ;9			Diftol
 ;6			Graph style of X*T
 ;?			equations
@@ -1704,9 +1872,10 @@ AppvarInitSize 	equ rungeCacheSize+appvarInitDataLength+appVarGraphStylesLength+
 
 StatusOffset	equ 2+rungeCacheSize
 RKEvalOffset	equ 2+rungeCacheSize+1
-DiftolOffset	equ 2+rungeCacheSize+2
-StyleOffset		equ 2+rungeCacheSize+2+9
-EquOffset		equ 2+rungeCacheSize+2+9+appVarGraphStylesLength
+EnabledOffset	equ 2+rungeCacheSize+2
+DiftolOffset	equ 2+rungeCacheSize+3
+StyleOffset		equ 2+rungeCacheSize+3+9
+EquOffset		equ 2+rungeCacheSize+3+9+appVarGraphStylesLength
 
 ;STATUSBITS
 EulerBit		equ 0	;0=euler, 1=RK
@@ -1715,15 +1884,14 @@ ExprBit		equ 7 ;Copy of the ExprOn/Off bit
 
 end_of_app:
 app_size equ end_of_app-4080h
-;NOT IMPLEMENTED:disallow y1(..) calls inside ODE's
-;NOT IMPLEMENTED:reset tstep,tmax to our own values when zoom:Zstandard?
-;NOT IMPLEMENTED: modify vars menu to disallow certain equations
-;FIX:Redirect errors when ON:BREAK is raised in Y*
-;FIX:implement expron/exproff? (problems with either putting it on top of equ nr in upper right corner or disappearing)
-;FIX: Save equations/system variables/settings that will be overwritten
-;FIX: invalidate cache when functions, initial values or settings(tstep,tmin) are changed
+;FIX:disallow y1(..) calls inside ODE's
+;FIX:Redirect errors when ON:BREAK is raised in Y* when table is active
+;FIX:invalidate cache when functions, initial values or settings(tstep,tmin) are changed
+
+;--------------------------------MAYBE LATER--------------------------------
 ;CLEANUP: Use variable used during graphing to support smart graph
-;FIX: When memory is full, calc should not be left in illegal state (createEquations for example)
+;FIX:reset tstep,tmax to our own values when zoom:Zstandard?
+;FIX:implement expron/exproff? (problems with either putting it on top of equ nr in upper right corner or disappearing)
 
 ;Y= Screen (might change)
 ;* Use only one line to display result, followed by ...

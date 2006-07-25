@@ -8,6 +8,9 @@ runge:
 	push de
 	call RclT
 	rst rPUSHREALO1;save X
+	pop ix
+	AppOnErr runge_errorhandler
+	push ix
 	call runge_lookup_simple_cache
 	bit cacheRungeSimpleValidBit,(hl)
 	jr z,runge_skip_simple_cache
@@ -351,10 +354,18 @@ runge_return_interpolate:
 	call runge_interpolate
 
 runge_return_cache:
+	AppOffErr
 	B_CALL PopRealO1
 	call StoT
 	B_CALL OP2ToOP1
 	ret
+
+runge_errorhandler:
+	push af
+	B_CALL PopRealO1
+	call StoT
+	pop af
+	B_JUMP JError
 
 runge_retry:
 	;FPS=[f4*,Yn+1*,f1*,Y*,step_updated,X,X_target,...]
@@ -1138,7 +1149,9 @@ runge_f4_err: ;1/8 in floating point
 
 ;FIX: invalidate simple cache when raising error
 ;FIX: change endpoint cache so that we know when the cache contains the start and end of an rk-step (invalidate if not?)
+;FIX: report error when stepsize gets too small
+
+;--------------------------------MAYBE LATER--------------------------------
 ;CLEANUP: don't loop when x0 is requested
 ;CLEANUP: don't multiply by 9 when deallocating FPS use DeallocFPS instead
 ;CLEANUP: use OP*Set* to optimize the code
-;FIX:report error when stepsize gets too small
