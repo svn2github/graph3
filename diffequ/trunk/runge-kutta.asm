@@ -182,6 +182,29 @@ runge_load_from_initial_values:
 	call runge_save_endpoint_cache;save initial values in cache for easy interpolation
 
 runge_loop_f1_known:
+	;Check if stepsize is large enough
+	;IX=[Y*,step,X,X_target,...]
+	push ix
+	pop hl
+	ld de,-9
+	add hl,de
+	B_CALL Mov9ToOP2
+	push ix
+	pop hl
+	ld de,-9*2
+	add hl,de
+	rst rMOV9TOOP1
+	B_CALL OP1ToOP3
+	rst rFPADD;X+step
+	B_CALL OP3ToOP2
+	B_CALL FPSub ;(X+step)-X
+	ld a,(OP1+1)
+	cp 80h-14;E-14
+	jr nc,$f
+	B_JUMP ErrTolTooSmall
+$$:
+
+
 	pop de
 	push de
 	ld a,50h
@@ -222,7 +245,7 @@ runge_loop_f1_known:
 	add hl,bc
 	rst rMOV9TOOP1
 	ld hl,20h*256+80h;2
-	call runge_load_OP2
+	call LoadOP2
 	B_CALL FPMult
 	jr runge_guess_skip
 runge_nodouble:
@@ -230,10 +253,10 @@ runge_nodouble:
 	call load_diftol
 	B_CALL FPDiv
 	ld hl,25h*256+7Fh;.25
-	call runge_load_OP2
+	call LoadOP2
 	B_CALL YToX
 	ld hl,90h*256+7Fh;.9
-	call runge_load_OP2
+	call LoadOP2
 	B_CALL FPMult
 	push ix
 	pop hl
@@ -254,7 +277,7 @@ runge_guess_skip:
 	jr nc,runge_errest_skip
 	ld hl,50h*256+7Fh;.5
 runge_errest_skip:
-	call runge_load_OP2
+	call LoadOP2
 	push ix
 	pop hl
 	ld bc,-9
@@ -340,7 +363,7 @@ runge_exit_loop:
 
 	pop de
 	push de
-	call runge_count_equations
+	call CountEquations
 	add a
 	add 2;*2+2
 	call runge_mult_A_by_9
@@ -362,6 +385,12 @@ runge_return_cache:
 
 runge_errorhandler:
 	push af
+	call runge_lookup_simple_cache
+	res cacheRungeSimpleValidBit,(hl)
+	ld bc,simpleCacheSize
+	add hl,bc
+	res cache1ValidBit,(hl)
+	res cache2ValidBit,(hl)
 	B_CALL PopRealO1
 	call StoT
 	pop af
@@ -371,7 +400,7 @@ runge_retry:
 	;FPS=[f4*,Yn+1*,f1*,Y*,step_updated,X,X_target,...]
 	pop de
 	push de
-	call runge_count_equations
+	call CountEquations
 	add a;remove both f4* and Yn+1*
 	call runge_mult_A_by_9
 	ld e,a
@@ -525,7 +554,7 @@ runge_update_x_y:
 	rst rMOV9TOOP1
 	pop hl
 	ld l,7Fh
-	call runge_load_OP2
+	call LoadOP2
 	;OP2=a*0.1
 	B_CALL FPMult
 	B_CALL OP1ToOP3;h*a*0.1
@@ -543,7 +572,7 @@ runge_update_x_y:
 
 	pop de
 	push de
-	call runge_count_equations
+	call CountEquations
 	call runge_mult_A_by_9
 	ld hl,(FPS)
 	ld b,0
@@ -604,7 +633,7 @@ runge_update_x_y_skip:
 	push de
 	call runge_save_y_caches
 	pop de
-	call runge_count_equations
+	call CountEquations
 	call runge_mult_A_by_9
 	ld e,a
 	ld d,0
@@ -1024,7 +1053,7 @@ runge_dealloc_middle_FPS:;keeps the first B floats on the FPS and deletes the fo
 	;WARNING:B and C shouldn't be bigger than 4 because 5*6*9=270>255
 	ld hl,(FPS)
 	push bc
-	call runge_count_equations
+	call CountEquations
 	pop bc
 	ld e,a
 	xor a
@@ -1072,15 +1101,8 @@ runge_mult_A_by_9:;destroys B
 	add b
 	ret
 
-runge_load_OP2:;hl=M*256+E
-	push hl
-	B_CALL ZeroOP2
-	pop hl
-	ld (OP2+1),hl
-	ret
-
 runge_HL_minus_equNr_times_9:
-	call runge_count_equations
+	call CountEquations
 runge_HL_minus_A_times_9:
 	or a
 	ret z
@@ -1102,15 +1124,6 @@ runge_HL_plus_A_times_9:
 $$:
 	add hl,de
 	djnz $b
-	ret
-
-runge_count_equations:;returns the nr of active equations in d
-	xor a
-	ld b,6
-runge_count_equations_loop:
-	rrc d
-	adc a,0
-	djnz runge_count_equations_loop
 	ret
 
 runge_load_y0:
@@ -1147,11 +1160,11 @@ runge_f3_err: ;-1/9 in floating point
 runge_f4_err: ;1/8 in floating point
 	db 00h,7Fh,12h,50h,00h,00h,00h,00h,00h
 
-;FIX: invalidate simple cache when raising error
-;FIX: change endpoint cache so that we know when the cache contains the start and end of an rk-step (invalidate if not?)
-;FIX: report error when stepsize gets too small
-
 ;--------------------------------MAYBE LATER--------------------------------
 ;CLEANUP: don't loop when x0 is requested
 ;CLEANUP: don't multiply by 9 when deallocating FPS use DeallocFPS instead
 ;CLEANUP: use OP*Set* to optimize the code
+;FIX: Improve checks to use cache 
+;		* both caches have to be valid now
+;		* error handler simple invalidates all caches
+;		* has to know whether the cache contains begin and endpoint of a rk step

@@ -47,6 +47,7 @@ SOURCE = main.asm
 DEP = e:\soc ti83+\ti83plus.inc
 DEP = euler.asm
 DEP = runge-kutta.asm
+DEP = slopefield.asm
 #end
 
 [C SETTINGS]

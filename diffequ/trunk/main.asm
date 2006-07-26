@@ -184,6 +184,11 @@ execute_diffequ_algorithm_RK:
 regraph_hook:
 	db 83h
 	call SetCalcSpeed
+	cp 09h
+	jr nz,regraph_hook_not9
+	call SlopeField
+	jr regraph_hook_return
+regraph_hook_not9:
 	cp 08h
 	jr nz,regraph_hook_return
 
@@ -317,10 +322,19 @@ app_switch_hook_ExitYEqu_loop2:
 	;store which equations need to be evaluated in RK mode
 	push de
 	call LookupAppVar 
+	push de
+	pop bc
 	ld hl,RKEvalOffset
 	add hl,de
 	pop de
 	ld (hl),d
+	;Erase cache if smart graph can't be used
+	bit smartGraph_inv,(IY+smartFlags)
+	ret z
+	ld hl,2
+	add hl,bc;HL=cache location
+	ld bc,rungeCacheSize
+	B_CALL MemClear
 	ret
 
 app_switch_hook_ExitYEqu_CheckEqu:
@@ -426,6 +440,7 @@ GraphHook_Not2:
 	ex de,hl
 	ld hl,appvarInitDataDiftol
 	call Mov9
+	call Mov9;copy FldRes
 	pop bc
 GraphHook_Not6:
 GraphHook_Allow:
@@ -682,13 +697,45 @@ WindowHook_Not5:
 	ld a,(hl)
 	cp WindowHook_Identifier
 	jr nc,WindowHook_6NoToken
+	push af
 	B_CALL StoSysTok
+	pop af
+	cp TMINt
+	jr z,WindowHook_EraseCache
+	cp TSTEPt
+	jr z,WindowHook_EraseCache
 	jr WindowHook_6Token
 WindowHook_6NoToken:
+	push af
 	rst rPUSHREALO1
-	call load_diftol_address
+	pop af
+	push af
+	cp WindowHook_FldResIdentifier
+	jr nz,WindowHook_NoError
+	B_CALL CkPosInt
+	jr nz,WindowHook_Error
+	B_CALL ConvOP1
+	cp 96/2+1
+	jr nc,WindowHook_Error
+	ld a,d
+	or a
+	jr z,WindowHook_NoError
+WindowHook_Error:
+	B_JUMP ErrDomain 
+WindowHook_NoError:
+	pop af
+	call WindowHook_LoadValueAddress
 	ex de,hl
 	B_CALL PopReal
+WindowHook_EraseCache:
+	rst rPUSHREALO1
+	call LookupAppVar
+	ex de,hl
+	inc hl
+	inc hl
+	ld bc,rungeCacheSize
+	B_CALL MemClear
+	B_CALL PopRealO1
 WindowHook_6Token:
 	ld	hl,OP1
 	or	0FFh
@@ -697,11 +744,22 @@ WindowHook_Not6:
 	dec	a
 	jr	nz,WindowHook_Not7
 	call load_status_address
-	bit EulerBit,(hl)
-	ld	hl,WindowHook_TableEuler + 3
+	ld a,(hl)
+	ld hl,WindowHook_TablePointers
+	bit EulerBit,a
 	jr z,$f
-	ld hl,WindowHook_TableRK + 3
+	ld de,4
+	add hl,de
 $$:
+	bit SlopeFldBit,a
+	jr z,$f
+	inc hl
+	inc hl
+$$:
+	ld a,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,a
 WindowHook_Disallow:
 	or	0FFh
 	ret
@@ -736,8 +794,26 @@ WindowHook_RclValue:
 	B_CALL RclSysTok
 	ret
 WindowHook_RclValueNoToken:
-	call load_diftol
+	call WindowHook_LoadValueAddress
+	rst rMOV9TOOP1
 	ret
+
+WindowHook_LoadValueAddress:
+	push af
+	call LookupAppVar
+	ld hl,FldresOffset+2
+	add hl,de
+	pop de
+	ld e,d
+	ld d,0FFh
+	add hl,de
+	ret
+
+WindowHook_TablePointers:
+	dw WindowHook_TableEuler+3
+	dw WindowHook_TableEulerField+3
+	dw WindowHook_TableRK+3
+	dw WindowHook_TableRKField+3
 
 WindowHook_TableEuler:
 	db 0FFh
@@ -762,6 +838,31 @@ WindowHook_TableEuler:
 	dw 0
 	db 0FFh
 
+WindowHook_TableEulerField:
+	db 0FFh
+	dw 0
+	db TMINt
+	dw 0
+	db TMAXt
+	dw 0
+	db TSTEPt
+	dw 0
+	db XMINt
+	dw 0
+	db XMAXt
+	dw 0
+	db XSCLt
+	dw 0
+	db YMINt
+	dw 0
+	db YMAXt
+	dw 0
+	db YSCLt
+	dw 0
+	db -2
+	dw WindowHook_FldResStr
+	db 0FFh
+
 WindowHook_TableRK:
 	db 0FFh
 	dw 0
@@ -783,14 +884,46 @@ WindowHook_TableRK:
 	dw 0
 	db YSCLt
 	dw 0
-	db 0FEh
+	db -2-9
 	dw WindowHook_DifTolStr
 	db 0FFh
 
+WindowHook_TableRKField:
+	db 0FFh
+	dw 0
+	db TMINt
+	dw 0
+	db TMAXt
+	dw 0
+	db TSTEPt
+	dw 0
+	db XMINt
+	dw 0
+	db XMAXt
+	dw 0
+	db XSCLt
+	dw 0
+	db YMINt
+	dw 0
+	db YMAXt
+	dw 0
+	db YSCLt
+	dw 0
+	db -2-9
+	dw WindowHook_DifTolStr
+	db -2
+	dw WindowHook_FldResStr
+	db 0FFh
+
+
 WindowHook_DifTolStr:
 	db "Diftol",0
+WindowHook_DifTolIdentifier	equ -2-9
+WindowHook_FldResStr:
+	db "Fldres",0
+WindowHook_FldResIdentifier	equ -2
 
-WindowHook_Identifier equ 0FEh ;first identifier-1 that's not a system variable token
+WindowHook_Identifier equ -2-9 ;first identifier that's not a system variable token
 
 ;;;;;;;;;;;;;;;;Start of ModeHook PORTED from graph3
 
@@ -958,18 +1091,31 @@ ModeHook_Table:
 	dw tLblOn,  flags + grfDBFlags			
 	db 1<<grfLabel,1<<grfLabel	,0
 
-	db	00001001b
+	db	00001101b
 	dw ModeHook_Strings_Euler,  _Flags			
 	db 1<<EulerBit,0	,2
 
-	db	00001010b
+	db	00001110b
 	dw ModeHook_Strings_RungeKutta,  _Flags			
 	db 1<<EulerBit,1<<EulerBit	,2
+
+	db	00001001b
+	dw ModeHook_Strings_NoField,  _Flags			
+	db 1<<SlopeFldBit,0	,1
+
+	db	00001010b
+	dw ModeHook_Strings_Field,  _Flags			
+	db 1<<SlopeFldBit,1<<SlopeFldBit	,1
 
 ModeHook_Strings_Euler:
 	db "Euler",0
 ModeHook_Strings_RungeKutta:
 	db "RungeKutta",0
+
+ModeHook_Strings_NoField:
+	db "FieldOff",0
+ModeHook_Strings_Field:
+	db "FieldOn",0
 
 ModeHook_gmMonVectors:
 	dw ModeHook_gmcxMain,ModeHook_gmcxDummyRet,ModeHook_gmcxPutAway
@@ -1774,6 +1920,22 @@ load_equation2:
 equation:
 	db EquObj, tVarEqu, tX1T,0
 
+CountEquations:;returns the nr of active equations in d
+	xor a
+	ld b,6
+CountEquations_Loop:
+	rrc d
+	adc a,0
+	djnz CountEquations_Loop
+	ret
+
+LoadOP2:;hl=M*256+E
+	push hl
+	B_CALL ZeroOP2
+	pop hl
+	ld (OP2+1),hl
+	ret
+
 load_Y_equation:
 	ld a,tY1
 	add e
@@ -1782,6 +1944,13 @@ load_Y_equation:
 	ld (OP1+2),a
 	ret
 	
+load_fldres:
+	call LookupAppVar
+	ld hl,FldresOffset
+	add hl,de
+	rst rMOV9TOOP1
+	ret
+
 load_equ_address:
 	call LookupAppVar
 	ld hl,EquOffset
@@ -1838,6 +2007,7 @@ Xstep equ TSTEPt
 
 	include "euler.asm"
 	include "runge-kutta.asm"
+	include "slopefield.asm"
 
 cacheSwitchBit					equ 0
 cache1ValidBit					equ 1
@@ -1853,6 +2023,8 @@ appvarInitData:
 	db 0;equations that are enabled
 appvarInitDataDiftol:
 	db 00h,7Dh,10h,00h,00h,00h,00h,00h,00h ;.001 diftol
+appvarInitDataFldRes
+	db 00h,80h,80h,00h,00h,00h,00h,00h,00h ;8 fldres
 appvarInitDataEnd:
 appvarInitDataLength equ appvarInitDataEnd-appvarInitData
 
@@ -1874,11 +2046,13 @@ StatusOffset	equ 2+rungeCacheSize
 RKEvalOffset	equ 2+rungeCacheSize+1
 EnabledOffset	equ 2+rungeCacheSize+2
 DiftolOffset	equ 2+rungeCacheSize+3
-StyleOffset		equ 2+rungeCacheSize+3+9
-EquOffset		equ 2+rungeCacheSize+3+9+appVarGraphStylesLength
+FldresOffset	equ 2+rungeCacheSize+3+9
+StyleOffset		equ 2+rungeCacheSize+3+9+9
+EquOffset		equ 2+rungeCacheSize+3+9+9+appVarGraphStylesLength
 
 ;STATUSBITS
 EulerBit		equ 0	;0=euler, 1=RK
+SlopeFldBit	equ 1 ;0=no slope field 1=draw slope field
 SimultBit	equ 6 ;Copy of the simultaneous/sequential bit
 ExprBit		equ 7 ;Copy of the ExprOn/Off bit
 
@@ -1886,11 +2060,10 @@ end_of_app:
 app_size equ end_of_app-4080h
 ;FIX:disallow y1(..) calls inside ODE's
 ;FIX:Redirect errors when ON:BREAK is raised in Y* when table is active
-;FIX:invalidate cache when functions, initial values or settings(tstep,tmin) are changed
 
 ;--------------------------------MAYBE LATER--------------------------------
 ;CLEANUP: Use variable used during graphing to support smart graph
-;FIX:reset tstep,tmax to our own values when zoom:Zstandard?
+;FIX:implement our own version of tmin,tstep and tmax with more sensible default values for diffequs
 ;FIX:implement expron/exproff? (problems with either putting it on top of equ nr in upper right corner or disappearing)
 
 ;Y= Screen (might change)

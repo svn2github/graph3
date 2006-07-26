@@ -274,7 +274,7 @@ eulerCacheBlockSize equ 9*4+1
 ;19..27	X2
 ;28..36	Y(X2)
 
-eulerCacheSize equ eulerCacheBlockSize*6 ;X and Y1..Y6
+eulerCacheSize equ eulerCacheBlockSize*6 ;Y1..Y6
 ;EULER CACHE:
 ;0..36		Cache Block for Y1
 ;37..73		Cache Block for Y2
