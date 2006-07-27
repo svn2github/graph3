@@ -221,7 +221,7 @@ regraph_hook_error:
 	res numOP1,(IY+ParsFlag2)
 	ld b,a
 	and 7Fh
-	cp 8 ;only ignore teh first errors
+	cp 8 ;only ignore the first errors
 	jr c,regraph_hook_error_return
 	ld a,b
 	B_JUMP JError
@@ -464,9 +464,7 @@ $$:
 	jr $b
 $$:
 	push bc
-	call LookupAppVar
-	ld hl,RKEvalOffset
-	add hl,de
+	call load_RKEval_address
 	ld a,(hl)
 	pop bc
 	and b
@@ -1951,12 +1949,25 @@ load_fldres:
 	rst rMOV9TOOP1
 	ret
 
+load_simple_cache_address:
+	call LookupAppVar
+	ex de,hl
+	inc hl
+	inc hl
+	ret
+
 load_equ_address:
 	call LookupAppVar
 	ld hl,EquOffset
 	add hl,de
 	ret
 
+load_RKEval_address:
+	call LookupAppVar
+	ld hl,RKEvalOffset
+	add hl,de
+	ret
+	
 load_style_address:
 	call LookupAppVar
 	ld hl,StyleOffset
@@ -2017,6 +2028,9 @@ cacheSwitchMask				equ 1<<cacheSwitchBit
 cache1ValidMask				equ 1<<cache1ValidBit
 cache2ValidMask				equ 1<<cache2ValidBit
 
+cacheSimpleValidBit	equ 7;in simple cache statusbits
+cacheSimpleValidMask	equ 1<<cacheSimpleValidBit
+
 appvarInitData:
 	db 0;statusbits
 	db 0;equations to be evaluated in RK mode
@@ -2031,8 +2045,17 @@ appvarInitDataLength equ appvarInitDataEnd-appvarInitData
 appVarGraphStylesLength		equ 6
 appVarInitEquationsLength	equ 6*2*2
 
+simpleCacheSize equ 1+7*9 ;X and Y1..Y6
+;SIMPLE CACHE:
+;0			statusbits
+;1..9		X
+;10..63	Y6..Y1 (reverse order!)
+
+
+rungeCacheSize equ simpleCacheSize+endpointCacheSize
+
 ;APPVAR
-;316		Cache (size of runge cache)
+;316		Cache (size of runge cache, always starts with SimpleCache)
 ;1			Statusbits
 ;1			Equations to be evaluated in RK mode
 ;1			Equations that are enabled

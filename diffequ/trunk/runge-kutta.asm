@@ -11,8 +11,8 @@ runge:
 	pop ix
 	AppOnErr runge_errorhandler
 	push ix
-	call runge_lookup_simple_cache
-	bit cacheRungeSimpleValidBit,(hl)
+	call load_simple_cache_address
+	bit cacheSimpleValidBit,(hl)
 	jr z,runge_skip_simple_cache
 	inc hl
 	push hl
@@ -358,8 +358,8 @@ $$:
 runge_exit_loop:	
 	;end RK
 	;invalidate cache after RK is finished
-	call runge_lookup_simple_cache
-	res cacheRungeSimpleValidBit,(hl)
+	call load_simple_cache_address
+	res cacheSimpleValidBit,(hl)
 
 	pop de
 	push de
@@ -385,8 +385,8 @@ runge_return_cache:
 
 runge_errorhandler:
 	push af
-	call runge_lookup_simple_cache
-	res cacheRungeSimpleValidBit,(hl)
+	call load_simple_cache_address
+	res cacheSimpleValidBit,(hl)
 	ld bc,simpleCacheSize
 	add hl,bc
 	res cache1ValidBit,(hl)
@@ -854,13 +854,6 @@ runge_interpolate_load_cache:
 	B_CALL CpyToFPS2
 	ret
 
-simpleCacheSize equ 1+7*9 ;X and Y1..Y6
-;SIMPLE CACHE:
-;0			statusbits
-;1..9		X
-;10..63	Y6..Y1 (reverse order!)
-;FOLLOWED BY ENDPOINT CACHE
-
 endpointCacheBlockSize equ (2+6+6)*9
 ;ENDPOINT CACHE BLOCK:
 ;0..8		X
@@ -874,16 +867,6 @@ endpointCacheSize equ 1+endpointCacheBlockSize*2 ;X and Y1..Y6
 ;1..126		cache block 1
 ;127..252	cache block 1
 
-rungeCacheSize equ simpleCacheSize+endpointCacheSize
-cacheRungeSimpleValidBit	equ 7
-cacheRungeSimpleValidMask	equ 1<<cacheRungeSimpleValidBit
-
-runge_lookup_simple_cache:
-	call LookupAppVar
-	ex de,hl
-	inc hl
-	inc hl
-	ret
 
 runge_lookup_endpoint_cache:
 	call LookupAppVar
@@ -949,8 +932,8 @@ runge_save_endpoint_cache2:
 
 runge_save_y_caches:
 	push de
-	call runge_lookup_simple_cache
-	ld a,cacheRungeSimpleValidMask
+	call load_simple_cache_address
+	ld a,cacheSimpleValidMask
 	or (hl)
 	ld (hl),a
 	inc hl
