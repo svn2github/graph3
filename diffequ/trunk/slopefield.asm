@@ -218,7 +218,7 @@ SlopeField_XUndefinedError:
 	B_CALL OP1Set0
 	jr SlopeField_ContinueRclT
 
-SlopeField_StoreY:;FIX:Store Y value
+SlopeField_StoreY:
 	rst rPUSHREALO1
 	call RclT
 	B_CALL OP1ToOP6
@@ -227,14 +227,25 @@ SlopeField_StoreY:;FIX:Store Y value
 	call runge_save_y_caches
 	ret
 
-SlopeField_ErrorHandler;FIX:make reset simplecachevalidbit and restore eulerbit when an error occurs
+SlopeField_ErrorHandler:
 	ld b,a
 	and 7Fh
 	cp 8 ;only ignore the first errors
 	jr c,SlopeField_Continue
 SlopeField_JumpError:
-	ld a,b
-	B_JUMP JError
+	pop af
+	ld c,a
+	push bc
+	call load_simple_cache_address
+	res cacheSimpleValidBit,(hl)
+	ld de,StatusOffset-2
+	add hl,de
+	pop bc
+	bit EulerBit,c
+	jr nz,$f
+	res EulerBit,(hl)
+$$:
+	jp DisplayOriginalError
 
 SlopeField_ParserErrorHandler:
 	ld b,a

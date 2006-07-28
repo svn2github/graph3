@@ -113,11 +113,12 @@ StartApp:
 	ld hl,YEquHook
 	B_CALL EnableYEquHook
 
+ExitApp:
 	B_JUMP JForceCmdNoChar
 
 Restore:
 	call RestoreCalc
-	B_JUMP JForceCmdNoChar
+	jr ExitApp
 
 parser_hook:
 	db 83h
@@ -169,17 +170,48 @@ parser_hook_real:
 execute_diffequ_algorithm:
 	push de
 	call load_status_address
-	bit EulerBit,(hl)
 	pop de
+	ld d,(hl)
+	push de
+	call RclT
+	rst rPUSHREALO1;save X
+	pop ix
+	push ix
+	apponerr execute_diffequ_algorithm_error
+	push ix
+	pop de
+	bit EulerBit,d
 	jr nz,execute_diffequ_algorithm_RK
 	call euler
+execute_diffequ_algorithm_finish:
+	appofferr
+	pop ix 
+	B_CALL PopRealO1
+	call StoT
+	B_CALL OP2ToOP1
 	or 0FFh
 	ret
 
 execute_diffequ_algorithm_RK:
 	call runge
-	or 0FFh
-	ret
+	jr execute_diffequ_algorithm_finish
+
+execute_diffequ_algorithm_error:
+	pop de
+	push af
+	bit EulerBit,d
+	call nz,ClearCache;Simple erase cache in case of RK
+	B_CALL PopRealO1
+	call StoT
+	pop af
+	ld b,a
+	and 7Fh
+	cp 6;ON:BREAK
+	jr z,DisplayError
+DisplayOriginalError:
+	ld a,b
+DisplayError:
+	B_JUMP JError
 
 regraph_hook:
 	db 83h
@@ -222,10 +254,7 @@ regraph_hook_error:
 	ld b,a
 	and 7Fh
 	cp 8 ;only ignore the first errors
-	jr c,regraph_hook_error_return
-	ld a,b
-	B_JUMP JError
-regraph_hook_error_return:
+	jr nc,DisplayOriginalError
 	ld hl,equation
 	rst rMOV9TOOP1
 	or 0FFh
@@ -239,6 +268,10 @@ set_graph_mode:
 	set grfSimul,(IY+grfDBFlags)
 	set 0,(IY+24);set ExprOff because we don't want to see the X*T and Y*T expressions
 	ret
+
+RemoveGoto_ErrorHandler:
+	and 07Fh
+	jp DisplayError
 
 app_switch_hook:
 	db 83h
@@ -260,6 +293,7 @@ app_switch_hook:
 	ret
 
 app_switch_hook_ExitYEqu:
+	apponerr RemoveGoto_ErrorHandler
 	ld e,0
 app_switch_hook_ExitYEqu_loop:
 	push de
@@ -330,11 +364,8 @@ app_switch_hook_ExitYEqu_loop2:
 	ld (hl),d
 	;Erase cache if smart graph can't be used
 	bit smartGraph_inv,(IY+smartFlags)
-	ret z
-	ld hl,2
-	add hl,bc;HL=cache location
-	ld bc,rungeCacheSize
-	B_CALL MemClear
+	call nz,ClearCache
+	AppOffErr
 	ret
 
 app_switch_hook_ExitYEqu_CheckEqu:
@@ -382,7 +413,7 @@ app_switch_hook_ExitYEqu_CheckEquLoop2:
 	pop de
 	call app_switch_hook_ExitYEqu_CheckEqu
 	pop hl
-	pop bc
+	pop bc	
 app_switch_hook_ExitYEqu_CheckEquNotY:
 	dec hl
 	ld a,(hl)
@@ -727,12 +758,7 @@ WindowHook_NoError:
 	B_CALL PopReal
 WindowHook_EraseCache:
 	rst rPUSHREALO1
-	call LookupAppVar
-	ex de,hl
-	inc hl
-	inc hl
-	ld bc,rungeCacheSize
-	B_CALL MemClear
+	call ClearCache
 	B_CALL PopRealO1
 WindowHook_6Token:
 	ld	hl,OP1
@@ -1299,7 +1325,7 @@ ModeHook_NotkDown:
 	cp	kClear
 	jr	nz,ModeHook_NotClear
 	call	ModeHook_Quit
-	B_JUMP JForceCmdNoChar
+	jp ExitApp ;B_JUMP JForceCmdNoChar
 ModeHook_NotClear:
 
 	cp	kEnter
@@ -1324,12 +1350,7 @@ ModeHook_NotClear:
 	push hl
 	push de
 	push af
-	call LookupAppVar 
-	ex de,hl
-	inc hl
-	inc hl
-	ld bc,rungeCacheSize
-	B_CALL MemClear
+	call ClearCache
 	pop af
 	pop de
 	pop hl
@@ -1450,6 +1471,15 @@ PutsApp:;PORTED
 	rst	20h
 	ld	hl,OP1
 	B_CALL PutS
+	ret
+
+ClearCache:
+	call LookupAppVar
+	ex de,hl
+	inc hl
+	inc hl
+	ld bc,rungeCacheSize
+	B_CALL MemClear
 	ret
 
 Mov9:;PORTED
@@ -1634,7 +1664,7 @@ SetupCalc_Error:;Memory is full, error during CreateEqu
 	call RestoreCalc_NoSave
 	pop af
 	res 7,a
-	B_JUMP JError
+	jp DisplayError
 	
 
 RestoreCalc:
@@ -2081,14 +2111,17 @@ ExprBit		equ 7 ;Copy of the ExprOn/Off bit
 
 end_of_app:
 app_size equ end_of_app-4080h
-;FIX:disallow y1(..) calls inside ODE's
-;FIX:Redirect errors when ON:BREAK is raised in Y* when table is active
+
 
 ;--------------------------------MAYBE LATER--------------------------------
 ;CLEANUP: Use variable used during graphing to support smart graph
 ;FIX:implement our own version of tmin,tstep and tmax with more sensible default values for diffequs
 ;FIX:implement expron/exproff? (problems with either putting it on top of equ nr in upper right corner or disappearing)
+;FIX:implement Initial Condition chooser on graph
+;FIX:disallow y1(..) calls inside ODE's (Only work inside table, don't like modifying equations)
+;FIX:disallow recalling Y1..Y6 in diffequ mode (difficult,not worth it)
 
-;Y= Screen (might change)
+
+;Y= Screen
 ;* Use only one line to display result, followed by ...
 ;* When switching away make errors behave like the window screen

@@ -6,11 +6,6 @@ runge:
 	pop de
 	ld d,(hl)
 	push de
-	call RclT
-	rst rPUSHREALO1;save X
-	pop ix
-	AppOnErr runge_errorhandler
-	push ix
 	call load_simple_cache_address
 	bit cacheSimpleValidBit,(hl)
 	jr z,runge_skip_simple_cache
@@ -27,7 +22,7 @@ runge:
 	call runge_HL_plus_cache_offset
 	rst rMOV9TOOP1
 	rst rOP1TOOP2
-	jr runge_return_cache
+	ret
 runge_skip_simple_cache:
 	call runge_lookup_endpoint_cache
 	ld a,cache1ValidMask|cache2ValidMask
@@ -244,8 +239,7 @@ $$:
 	ld bc,-9
 	add hl,bc
 	rst rMOV9TOOP1
-	ld hl,20h*256+80h;2
-	call LoadOP2
+	B_CALL OP2Set2
 	B_CALL FPMult
 	jr runge_guess_skip
 runge_nodouble:
@@ -323,16 +317,14 @@ runge_errest_skip:
 	rst rMOV9TOOP1 ;X
 	rst rFPADD
 	pop de
-	ld bc,9
 	ld hl,OP1
-	ldir ;update X
+	call Mov9 ;update X
 	push ix
 	pop hl
 	ld bc,-9*3
 	add hl,bc
 	ld de,OP2
-	ld bc,9
-	ldir ;X_target
+	call Mov9 ;X_target
 	pop af
 	push af
 	and 80h
@@ -366,35 +358,14 @@ runge_exit_loop:
 	call CountEquations
 	add a
 	add 2;*2+2
-	call runge_mult_A_by_9
-	ld e,a
-	ld d,0
-	B_CALL DeallocFPS1
+	call DeallocFPSA
 	;FPS=[X_target,...]
 
 runge_return_interpolate:
 	pop de
 	call runge_interpolate
 
-runge_return_cache:
-	AppOffErr
-	B_CALL PopRealO1
-	call StoT
-	B_CALL OP2ToOP1
 	ret
-
-runge_errorhandler:
-	push af
-	call load_simple_cache_address
-	res cacheSimpleValidBit,(hl)
-	ld bc,simpleCacheSize
-	add hl,bc
-	res cache1ValidBit,(hl)
-	res cache2ValidBit,(hl)
-	B_CALL PopRealO1
-	call StoT
-	pop af
-	B_JUMP JError
 
 runge_retry:
 	;FPS=[f4*,Yn+1*,f1*,Y*,step_updated,X,X_target,...]
@@ -402,10 +373,7 @@ runge_retry:
 	push de
 	call CountEquations
 	add a;remove both f4* and Yn+1*
-	call runge_mult_A_by_9
-	ld e,a
-	ld d,0
-	B_CALL DeallocFPS1
+	call DeallocFPSA
 	;FPS=[f1*,Y*,step_updated,X,X_target,...]
 	jr runge_loop_f1_known
 
@@ -452,14 +420,8 @@ runge_calc_errest:
 	;FPS=[f4*,Yn+1*,f3*,f2*,f1*,Y*,step,X,X_target,...]
 	;IX=[Y*,step,X]
 	push de
-	ld bc,8
-	ld de,OP6+1
-	push de
-	ld hl,OP6
-	ld (hl),0
-	ldir
-	pop hl
-	ld (hl),80h;OP6=0.0
+
+	B_CALL OP5Set0
 
 	ld hl,(FPS)
 	pop de
@@ -524,7 +486,7 @@ $$:
 	;OP1=abs(h(5/72*f1-1/12*f2-1/9*f3+1/8*f4))  the error estimate
 	;FPS=[f4*,Yn+1*,f3*,f2*,f1*,Y*,step,X,X_target,...]
 
-	B_CALL OP6ToOP2
+	B_CALL OP5ToOP2
 	B_CALL Max
 	B_CALL OP1ToOP6
 	pop de
@@ -634,10 +596,10 @@ runge_update_x_y_skip:
 	call runge_save_y_caches
 	pop de
 	call CountEquations
-	call runge_mult_A_by_9
-	ld e,a
-	ld d,0
-	B_CALL DeallocFPS1
+DeallocFPSA:
+	ld l,a
+	ld h,0
+	B_CALL DeallocFPS
 	ret
 
 runge_update_final_x_y:
@@ -823,10 +785,9 @@ runge_interpolate:
 	rst rOP1TOOP2
 	;OP2=Ya+(X_target-Xa)*(Fa+(X_target-Xa)*(row3+(X_target-Xb)*row4))
 
-	ld de,7*9
-	B_CALL DeallocFPS1
-	;FPS=[X_target,...]
-	ret	
+	ld a,7
+	jp DeallocFPSA;FPS=[X_target,...]
+	;DeallocFPSA will return to caller
 	
 runge_interpolate_calc:
 	push hl
@@ -900,10 +861,8 @@ runge_save_endpoint_cache2:
 	pop hl
 	ld bc,-9*2
 	add hl,bc
-	ld bc,9
-	ldir;copy X
-	ld bc,9
-	ldir;copy step
+	call Mov9;copy X
+	call Mov9;copy step
 
 	ex de,hl
 	pop de
@@ -940,8 +899,7 @@ runge_save_y_caches:
 	
 	ex de,hl
 	ld hl,OP6
-	ld bc,9
-	ldir;copy X	
+	call Mov9;copy X	
 
 	ex de,hl
 	pop de
@@ -964,8 +922,7 @@ runge_save_in_appvar_loop:
 	rlc b
 	push bc
 	jr nc,runge_save_in_appvar_dont_save
-	ld bc,9
-	ldir
+	call Mov9
 	jr runge_save_in_appvar_skip
 runge_save_in_appvar_dont_save:
 	ld bc,9
@@ -1145,8 +1102,6 @@ runge_f4_err: ;1/8 in floating point
 
 ;--------------------------------MAYBE LATER--------------------------------
 ;CLEANUP: don't loop when x0 is requested
-;CLEANUP: don't multiply by 9 when deallocating FPS use DeallocFPS instead
-;CLEANUP: use OP*Set* to optimize the code
 ;FIX: Improve checks to use cache 
 ;		* both caches have to be valid now
 ;		* error handler simple invalidates all caches

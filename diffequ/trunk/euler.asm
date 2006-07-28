@@ -8,11 +8,6 @@
 
 euler:
 	push de
-	call RclT
-	rst rPUSHREALO1;save X
-	pop ix
-	AppOnErr euler_errorhandler
-	push ix
 	rst rOP1TOOP2
 	ld a,X0
 	B_CALL RclSysTok
@@ -169,11 +164,9 @@ euler_loop_cache2:
 	B_CALL CpyTo2FPST
 	pop de
 	ld hl,OP1
-	ld bc,9
-	ldir
-	ld bc,9
+	call Mov9
 	ld hl,OP2
-	ldir
+	call Mov9
 
 	pop de
 	pop bc
@@ -214,18 +207,7 @@ euler_loop_skip:
 euler_skip_final:
 	B_CALL PopRealO2
 	pop de
-	AppOffErr
-	B_CALL PopRealO1
-	call StoT
-	B_CALL OP2ToOP1
 	ret
-
-euler_errorhandler:
-	push af
-	B_CALL PopRealO1
-	call StoT
-	pop af
-	B_JUMP JError
 
 euler_check_cache:;checks whether using the cache is usefull
 	;E contains equ number
