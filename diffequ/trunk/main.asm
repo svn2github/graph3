@@ -173,6 +173,8 @@ execute_diffequ_algorithm:
 	pop de
 	ld d,(hl)
 	push de
+	bit RealEquBit,d
+	jr z,DataTypeError
 	call RclT
 	rst rPUSHREALO1;save X
 	pop ix
@@ -195,6 +197,9 @@ execute_diffequ_algorithm_finish:
 execute_diffequ_algorithm_RK:
 	call runge
 	jr execute_diffequ_algorithm_finish
+
+DataTypeError:
+	B_JUMP ErrDataType
 
 execute_diffequ_algorithm_error:
 	pop de
@@ -294,6 +299,8 @@ app_switch_hook:
 
 app_switch_hook_ExitYEqu:
 	apponerr RemoveGoto_ErrorHandler
+	call load_status_address
+	set RealEquBit,(hl)
 	ld e,0
 app_switch_hook_ExitYEqu_loop:
 	push de
@@ -320,8 +327,10 @@ app_switch_hook_ExitYEqu_loop:
 	AppOnErr app_switch_hook_ExitYEqu_skip
 	B_CALL ParseInp
 	AppOffErr
+	bit numOP1,(IY+ParsFlag2)
+	jr z,app_switch_hook_ExitYEqu_skip;don't save
 	B_CALL CkOP1Real
-	jr nz,app_switch_hook_ExitYEqu_skip;don't save
+	jr nz,app_switch_hook_ExitYEqu_skipNoReal;don't save
 	B_CALL OP1ToOP6
 	pop de
 	push de 
@@ -332,6 +341,10 @@ app_switch_hook_ExitYEqu_loop:
 	B_CALL OP6ToOP1
 	B_CALL OP1ToEdit
 	B_CALL CloseEditEqu
+	jr app_switch_hook_ExitYEqu_skip
+app_switch_hook_ExitYEqu_skipNoReal:
+	call load_status_address
+	res RealEquBit,(hl)
 app_switch_hook_ExitYEqu_skip:
 	pop de
 	inc e
@@ -1478,7 +1491,7 @@ ClearCache:
 	ex de,hl
 	inc hl
 	inc hl
-	ld bc,rungeCacheSize
+	ld bc,CacheSize
 	B_CALL MemClear
 	ret
 
@@ -1504,7 +1517,7 @@ create_appvar:;PORTED
 	inc de
 	inc de
 	ex de,hl
-	ld bc,rungeCacheSize
+	ld bc,CacheSize
 	push hl
 	push bc
 	B_CALL MemClear
@@ -1657,6 +1670,7 @@ $$:
 	call CreateEquations
 	AppOffErr
 	call EnableEquations
+	B_CALL SetTblGraphDraw ;dirty graph and table
 	ret
 
 SetupCalc_Error:;Memory is full, error during CreateEqu
@@ -2082,10 +2096,11 @@ simpleCacheSize equ 1+7*9 ;X and Y1..Y6
 ;10..63	Y6..Y1 (reverse order!)
 
 
-rungeCacheSize equ simpleCacheSize+endpointCacheSize
+CacheSize equ simpleCacheSize+rungeCacheSize
 
 ;APPVAR
-;316		Cache (size of runge cache, always starts with SimpleCache)
+;64		Simple Cache
+;252		Cache (size of runge cache)
 ;1			Statusbits
 ;1			Equations to be evaluated in RK mode
 ;1			Equations that are enabled
@@ -2093,25 +2108,29 @@ rungeCacheSize equ simpleCacheSize+endpointCacheSize
 ;6			Graph style of X*T
 ;?			equations
 
-AppvarInitSize 	equ rungeCacheSize+appvarInitDataLength+appVarGraphStylesLength+appVarInitEquationsLength ;runge cache is larger than euler cache
+AppvarInitSize 	equ CacheSize+appvarInitDataLength+appVarGraphStylesLength+appVarInitEquationsLength ;runge cache is larger than euler cache
 
-StatusOffset	equ 2+rungeCacheSize
-RKEvalOffset	equ 2+rungeCacheSize+1
-EnabledOffset	equ 2+rungeCacheSize+2
-DiftolOffset	equ 2+rungeCacheSize+3
-FldresOffset	equ 2+rungeCacheSize+3+9
-StyleOffset		equ 2+rungeCacheSize+3+9+9
-EquOffset		equ 2+rungeCacheSize+3+9+9+appVarGraphStylesLength
+StatusOffset	equ 2+CacheSize
+RKEvalOffset	equ 2+CacheSize+1
+EnabledOffset	equ 2+CacheSize+2
+DiftolOffset	equ 2+CacheSize+3
+FldresOffset	equ 2+CacheSize+3+9
+StyleOffset		equ 2+CacheSize+3+9+9
+EquOffset		equ 2+CacheSize+3+9+9+appVarGraphStylesLength
 
 ;STATUSBITS
 EulerBit		equ 0	;0=euler, 1=RK
 SlopeFldBit	equ 1 ;0=no slope field 1=draw slope field
+RealEquBit	equ 2 ;0=an equation returns a non-real value (usually a list) 
+						;	1= all equations return a real value
 SimultBit	equ 6 ;Copy of the simultaneous/sequential bit
 ExprBit		equ 7 ;Copy of the ExprOn/Off bit
 
 end_of_app:
 app_size equ end_of_app-4080h
 
+;FIX: Get simple cache code in here
+;FIX: Modify app switch hook to set realequbit when equations contain lists
 
 ;--------------------------------MAYBE LATER--------------------------------
 ;CLEANUP: Use variable used during graphing to support smart graph
@@ -2119,6 +2138,7 @@ app_size equ end_of_app-4080h
 ;FIX:implement expron/exproff? (problems with either putting it on top of equ nr in upper right corner or disappearing)
 ;FIX:implement Initial Condition chooser on graph
 ;FIX:disallow y1(..) calls inside ODE's (Only work inside table, don't like modifying equations)
+;FIX:disallow lists inside ODE's (can't get list graphing to work correctly with rungekutta, euler works mostly when parsflags IY+6&7 are backed up.)
 ;FIX:disallow recalling Y1..Y6 in diffequ mode (difficult,not worth it)
 
 

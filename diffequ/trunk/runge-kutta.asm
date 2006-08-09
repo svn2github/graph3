@@ -118,10 +118,17 @@ $$:
 	B_CALL CpyToFPS1;X
 	ex de,hl
 	B_CALL CpyToFPST;step
-	push de
-	pop ix;save (FPS)
-
+	push de;FPST
+	push hl;cache pointer
+	ld hl,(fpBase)
 	ex de,hl
+	or a
+	sbc hl,de
+	push hl
+	pop ix;save FPS offset
+
+	pop de;cache pointer 
+	pop hl;FPST
 	ld bc,-9
 	add hl,bc
 	pop af
@@ -154,9 +161,12 @@ runge_load_from_initial_values:
 	ld (OP1),a
 	rst rPUSHREALO1;stepsize
 
-	ld hl,(fps)
+	ld hl,(FPS)
+	ld de,(fpBase)
+	or a
+	sbc hl,de
 	push hl
-	pop ix;save (FPS)
+	pop ix;save FPS offset
 
 	pop de
 	push de
@@ -179,16 +189,16 @@ runge_load_from_initial_values:
 runge_loop_f1_known:
 	;Check if stepsize is large enough
 	;IX=[Y*,step,X,X_target,...]
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld de,-9
 	add hl,de
-	B_CALL Mov9ToOP2
-	push ix
+	push hl
+	push de
+	B_CALL Mov9ToOP2;step
+	pop de
 	pop hl
-	ld de,-9*2
 	add hl,de
-	rst rMOV9TOOP1
+	rst rMOV9TOOP1;X
 	B_CALL OP1ToOP3
 	rst rFPADD;X+step
 	B_CALL OP3ToOP2
@@ -234,8 +244,7 @@ $$:
 	or a
 	jr nz,runge_nodouble
 	;zero error, double stepsize
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld bc,-9
 	add hl,bc
 	rst rMOV9TOOP1
@@ -252,8 +261,7 @@ runge_nodouble:
 	ld hl,90h*256+7Fh;.9
 	call LoadOP2
 	B_CALL FPMult
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld bc,-9
 	add hl,bc
 	B_CALL Mov9ToOP2
@@ -272,8 +280,7 @@ runge_guess_skip:
 	ld hl,50h*256+7Fh;.5
 runge_errest_skip:
 	call LoadOP2
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld bc,-9
 	add hl,bc
 	rst rMOV9TOOP1 ;step
@@ -285,8 +292,7 @@ runge_errest_skip:
 	B_CALL Min
 	;min(.5h,guess) or min(2h,guess)
 
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld bc,-9
 	add hl,bc
 	B_CALL Mov9ToOP2 ;step
@@ -296,8 +302,7 @@ runge_errest_skip:
 	push bc
 	and 80h
 	ld (OP1),a
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld bc,9
 	or a
 	sbc hl,bc
@@ -309,8 +314,7 @@ runge_errest_skip:
 	jr c,runge_retry;error too big,retry step
 	;step succeeded
 	;FPS=[f4*,Yn+1*,f1*,Y*,step,X,X_target,...]
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld bc,-9*2
 	add hl,bc
 	push hl
@@ -319,8 +323,7 @@ runge_errest_skip:
 	pop de
 	ld hl,OP1
 	call Mov9 ;update X
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld bc,-9*3
 	add hl,bc
 	ld de,OP2
@@ -475,8 +478,7 @@ $$:
 	ld de,runge_f1_err
 	call runge_mult_add_de
 	
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld de,-9
 	add hl,de
 	B_CALL Mov9ToOP2 ;step
@@ -509,8 +511,7 @@ runge_update_x_y:
 	push af
 	
 	;calculate h*a*0.1 here
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld de,-9
 	add hl,de
 	rst rMOV9TOOP1
@@ -522,8 +523,7 @@ runge_update_x_y:
 	B_CALL OP1ToOP3;h*a*0.1
 
 	rst rOP1TOOP2
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld de,-9*2
 	add hl,de
 	rst rMOV9TOOP1
@@ -563,8 +563,7 @@ runge_update_x_y_loop:
 	B_CALL FPMult
    rst rOP1TOOP2
 
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	pop de
 	push de
 
@@ -607,13 +606,11 @@ runge_update_final_x_y:
 	;IX=[Y*,step,X]
 	push de
 
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld de,-9
 	add hl,de
 	rst rMOV9TOOP1 ;step
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld de,-9*2
 	add hl,de
 	B_CALL Mov9ToOP2 ;X
@@ -667,8 +664,7 @@ $$:
 	ld de,runge_f1_inc
 	call runge_mult_add_de
 
-	push ix
-	pop hl
+	call runge_get_IX_pointer
 	ld de,-9
 	add hl,de
 	B_CALL Mov9ToOP2 ;step
@@ -822,7 +818,7 @@ endpointCacheBlockSize equ (2+6+6)*9
 ;18..71	Y6..Y1 (reverse order!)
 ;72..125	f1* (for Y6..Y1) (reverse order!)
 
-endpointCacheSize equ 1+endpointCacheBlockSize*2 ;X and Y1..Y6
+rungeCacheSize equ 1+endpointCacheBlockSize*2 ;X and Y1..Y6
 ;ENDPOINT CACHE:
 ;0				statusbits
 ;1..126		cache block 1
@@ -856,9 +852,9 @@ runge_save_endpoint_cache1:
 	inc hl
 runge_save_endpoint_cache2:
 
-	ex de,hl
-	push ix
-	pop hl
+	push hl
+	call runge_get_IX_pointer
+	pop de
 	ld bc,-9*2
 	add hl,bc
 	call Mov9;copy X
@@ -1084,6 +1080,13 @@ runge_load_y0_skip:
 	jr nz,runge_load_y0_loop
 	ret
 
+runge_get_IX_pointer:
+	push ix
+	pop de
+	ld hl,(fpBase)
+	add hl,de
+	ret
+
 runge_f1_inc: ;2/9 in floating point
 	db 00h,7Fh,22h,22h,22h,22h,22h,22h,22h
 runge_f2_inc: ;3/9 in floating point
@@ -1104,5 +1107,5 @@ runge_f4_err: ;1/8 in floating point
 ;CLEANUP: don't loop when x0 is requested
 ;FIX: Improve checks to use cache 
 ;		* both caches have to be valid now
-;		* error handler simple invalidates all caches
+;		* error handler simply invalidates all caches
 ;		* has to know whether the cache contains begin and endpoint of a rk step
