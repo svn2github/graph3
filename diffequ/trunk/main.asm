@@ -174,9 +174,36 @@ execute_diffequ_algorithm:
 	ld d,(hl)
 	push de
 	bit RealEquBit,d
-	jr z,DataTypeError
+	jr z,DataTypeError;bomb out when the equations aren't real
+
 	call RclT
 	rst rPUSHREALO1;save X
+	
+	
+	call load_simple_cache_address
+	push hl
+	B_CALL CpyTo1FPST;X
+	pop hl
+	bit cacheSimpleValidBit,(hl)
+	jr z,execute_diffequ_algorithm_skip_simple_cache
+	inc hl
+	push hl
+	B_CALL Mov9OP2Cp
+	pop hl
+	jr nz,execute_diffequ_algorithm_skip_simple_cache
+	push hl
+	ld de,9
+	B_CALL DeallocFPS1
+	pop hl
+	pop de
+	dec e;skip X
+	call runge_HL_plus_cache_offset
+	rst rMOV9TOOP1
+	or 0FFh
+	ret
+execute_diffequ_algorithm_skip_simple_cache:
+
+
 	pop ix
 	push ix
 	apponerr execute_diffequ_algorithm_error
@@ -299,12 +326,26 @@ app_switch_hook:
 
 app_switch_hook_ExitYEqu:
 	apponerr RemoveGoto_ErrorHandler
+	;fill simple cache with T
+	call load_simple_cache_address
+	set cacheSimpleValidBit,(hl)
+	inc hl
+	push hl
+	call RclT
+	pop de
+	ld b,7
+$$:
+	push bc
+	ld hl,OP1
+	call Mov9
+	pop bc
+	djnz $b
 	call load_status_address
 	set RealEquBit,(hl)
 	ld e,0
 app_switch_hook_ExitYEqu_loop:
 	push de
-	;Dis/Enable Y* function	re
+	;Dis/Enable Y* function
 	call load_equation
 	rst rFINDSYM
 	ld a,(hl)
@@ -321,16 +362,29 @@ app_switch_hook_ExitYEqu_loop:
 	ld (hl),a
 	pop de
 	push de
-	;Update initial value
-	ld a,1
-	call load_equation2
-	AppOnErr app_switch_hook_ExitYEqu_skip
+	;Check that equations returns a real value
+	call load_equation
+	AppOnErr app_switch_hook_ExitYEqu_skipEqu
 	B_CALL ParseInp
 	AppOffErr
 	bit numOP1,(IY+ParsFlag2)
-	jr z,app_switch_hook_ExitYEqu_skip;don't save
+	jr z,app_switch_hook_ExitYEqu_skipEqu;don't save
 	B_CALL CkOP1Real
-	jr nz,app_switch_hook_ExitYEqu_skipNoReal;don't save
+	call nz,ResetRealEquBit
+app_switch_hook_ExitYEqu_skipEqu:
+	pop de
+	push de
+	;Update initial value
+	ld a,1
+	call load_equation2
+	AppOnErr app_switch_hook_ExitYEqu_skipInitial
+	B_CALL ParseInp
+	AppOffErr
+	bit numOP1,(IY+ParsFlag2)
+	jr z,app_switch_hook_ExitYEqu_skipInitial;don't save
+	B_CALL CkOP1Real
+	call nz,ResetRealEquBit
+	jr nz,app_switch_hook_ExitYEqu_skipInitial;don't save
 	B_CALL OP1ToOP6
 	pop de
 	push de 
@@ -341,11 +395,7 @@ app_switch_hook_ExitYEqu_loop:
 	B_CALL OP6ToOP1
 	B_CALL OP1ToEdit
 	B_CALL CloseEditEqu
-	jr app_switch_hook_ExitYEqu_skip
-app_switch_hook_ExitYEqu_skipNoReal:
-	call load_status_address
-	res RealEquBit,(hl)
-app_switch_hook_ExitYEqu_skip:
+app_switch_hook_ExitYEqu_skipInitial:
 	pop de
 	inc e
 	ld a,6;0..5
@@ -379,7 +429,17 @@ app_switch_hook_ExitYEqu_loop2:
 	bit smartGraph_inv,(IY+smartFlags)
 	call nz,ClearCache
 	AppOffErr
+	call load_simple_cache_address
+	res cacheSimpleValidBit,(hl)
 	ret
+
+ResetRealEquBit:
+	push af
+	call load_status_address
+	res RealEquBit,(hl)
+	pop af
+	ret
+	
 
 app_switch_hook_ExitYEqu_CheckEqu:
 	push de

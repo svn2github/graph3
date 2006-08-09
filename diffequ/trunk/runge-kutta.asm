@@ -6,24 +6,7 @@ runge:
 	pop de
 	ld d,(hl)
 	push de
-	call load_simple_cache_address
-	bit cacheSimpleValidBit,(hl)
-	jr z,runge_skip_simple_cache
-	inc hl
-	push hl
-	B_CALL CpyTo1FPST
-	pop hl
-	push hl
-	B_CALL Mov9OP2Cp
-	pop hl
-	jr nz,runge_skip_simple_cache
-	pop de
-	dec e;skip X
-	call runge_HL_plus_cache_offset
-	rst rMOV9TOOP1
-	rst rOP1TOOP2
-	ret
-runge_skip_simple_cache:
+
 	call runge_lookup_endpoint_cache
 	ld a,cache1ValidMask|cache2ValidMask
 	and (hl)

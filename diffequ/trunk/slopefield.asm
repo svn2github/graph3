@@ -25,11 +25,7 @@ SlopeField_ContinueRclT:
 	;FPS=[X,...]
 
 	;Setup simple cache
-	call load_status_address
-	ld a,(hl)
-	set EulerBit,(hl);set RK mode
 	pop ix
-	push af
 	AppOnErr SlopeField_ErrorHandler
 	push ix
 
@@ -201,12 +197,6 @@ SlopeField_ContinueParser:
 SlopeField_Continue:
 	call load_simple_cache_address
 	res cacheSimpleValidBit,(hl)
-	pop af
-	bit EulerBit,a
-	jr nz,$f
-	call load_status_address
-	res EulerBit,(hl)
-$$:
 	B_CALL PopRealO1
 	call StoT
 	ret
@@ -233,18 +223,12 @@ SlopeField_ErrorHandler:
 	cp 8 ;only ignore the first errors
 	jr c,SlopeField_Continue
 SlopeField_JumpError:
-	pop af
-	ld c,a
 	push bc
 	call load_simple_cache_address
 	res cacheSimpleValidBit,(hl)
 	ld de,StatusOffset-2
 	add hl,de
 	pop bc
-	bit EulerBit,c
-	jr nz,$f
-	res EulerBit,(hl)
-$$:
 	jp DisplayOriginalError
 
 SlopeField_ParserErrorHandler:
