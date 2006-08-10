@@ -226,7 +226,8 @@ execute_diffequ_algorithm_RK:
 	jr execute_diffequ_algorithm_finish
 
 DataTypeError:
-	B_JUMP ErrDataType
+	ld a,9;datatype error without goto option
+	B_JUMP JError
 
 execute_diffequ_algorithm_error:
 	pop de
@@ -326,12 +327,43 @@ app_switch_hook:
 
 app_switch_hook_ExitYEqu:
 	apponerr RemoveGoto_ErrorHandler
+	;figure out which equations need to be evaluated in RK mode
+	ld de,0
+app_switch_hook_ExitYEqu_loop2:
+	push de
+	call load_equation
+	rst rFINDSYM
+	bit 5,(hl)
+	ex de,hl
+	pop de
+	call nz,app_switch_hook_ExitYEqu_CheckEqu
+	inc e
+	ld a,6;0..5
+	cp e
+	jr nz,app_switch_hook_ExitYEqu_loop2
+	;store which equations need to be evaluated in RK mode
+	push de
+	call LookupAppVar 
+	push de
+	pop bc
+	ld hl,RKEvalOffset
+	add hl,de
+	pop de
+	ld (hl),d
+	push de
+
+	;Erase cache if smart graph can't be used
+	bit smartGraph_inv,(IY+smartFlags)
+	call nz,ClearCache
+	call load_simple_cache_address
+	res cacheSimpleValidBit,(hl)
 	;fill simple cache with T
 	call load_simple_cache_address
 	set cacheSimpleValidBit,(hl)
 	inc hl
 	push hl
-	call RclT
+	B_CALL OP1Set0
+	call StoT
 	pop de
 	ld b,7
 $$:
@@ -342,6 +374,8 @@ $$:
 	djnz $b
 	call load_status_address
 	set RealEquBit,(hl)
+
+	pop de
 	ld e,0
 app_switch_hook_ExitYEqu_loop:
 	push de
@@ -370,6 +404,8 @@ app_switch_hook_ExitYEqu_loop:
 	bit numOP1,(IY+ParsFlag2)
 	jr z,app_switch_hook_ExitYEqu_skipEqu;don't save
 	B_CALL CkOP1Real
+	pop de
+	push de
 	call nz,ResetRealEquBit
 app_switch_hook_ExitYEqu_skipEqu:
 	pop de
@@ -383,6 +419,8 @@ app_switch_hook_ExitYEqu_skipEqu:
 	bit numOP1,(IY+ParsFlag2)
 	jr z,app_switch_hook_ExitYEqu_skipInitial;don't save
 	B_CALL CkOP1Real
+	pop de
+	push de
 	call nz,ResetRealEquBit
 	jr nz,app_switch_hook_ExitYEqu_skipInitial;don't save
 	B_CALL OP1ToOP6
@@ -402,41 +440,23 @@ app_switch_hook_ExitYEqu_skipInitial:
 	cp e
 	jr nz,app_switch_hook_ExitYEqu_loop
 	B_CALL CleanAll
-	;figure out which equations need to be evaluated in RK mode
-	ld de,0
-app_switch_hook_ExitYEqu_loop2:
-	push de
-	call load_equation
-	rst rFINDSYM
-	bit 5,(hl)
-	ex de,hl
-	pop de
-	call nz,app_switch_hook_ExitYEqu_CheckEqu
-	inc e
-	ld a,6;0..5
-	cp e
-	jr nz,app_switch_hook_ExitYEqu_loop2
-	;store which equations need to be evaluated in RK mode
-	push de
-	call LookupAppVar 
-	push de
-	pop bc
-	ld hl,RKEvalOffset
-	add hl,de
-	pop de
-	ld (hl),d
-	;Erase cache if smart graph can't be used
-	bit smartGraph_inv,(IY+smartFlags)
-	call nz,ClearCache
 	AppOffErr
-	call load_simple_cache_address
-	res cacheSimpleValidBit,(hl)
 	ret
 
-ResetRealEquBit:
+ResetRealEquBit:;FIX: make sure this is only called when enabled/used equations are nonreal
 	push af
+	ld b,e
+	inc b
+	rlc d
+$$:
+	rrc d
+	djnz $b
+
+	bit 0,d
+	jr z,$f
 	call load_status_address
 	res RealEquBit,(hl)
+$$:
 	pop af
 	ret
 	
@@ -1746,7 +1766,7 @@ RestoreCalc:
 	call SaveEnabledEquations
 RestoreCalc_NoSave:
 	xor a
-	ld (IY+35h),a;FIX:restore hooks instead of deleting them
+	ld (IY+35h),a
 	ld (IY+36h),a;disable hooks
 	ld (YEquHookState),a;not in diffequ mode anymore
 	call DeleteEquations
@@ -2189,9 +2209,7 @@ ExprBit		equ 7 ;Copy of the ExprOn/Off bit
 end_of_app:
 app_size equ end_of_app-4080h
 
-;FIX: Get simple cache code in here
-;FIX: Modify app switch hook to set realequbit when equations contain lists
-
+;FIX:restore hooks instead of deleting them
 ;--------------------------------MAYBE LATER--------------------------------
 ;CLEANUP: Use variable used during graphing to support smart graph
 ;FIX:implement our own version of tmin,tstep and tmax with more sensible default values for diffequs

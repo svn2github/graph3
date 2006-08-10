@@ -2,6 +2,8 @@ SlopeField:
 	call load_status_address
 	bit SlopeFldBit,(hl)
 	ret z
+	bit RealEquBit,(hl)
+	ret z
 	inc hl
 	ld d,(hl)
 	call CountEquations
