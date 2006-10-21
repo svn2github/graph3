@@ -30,7 +30,7 @@ NAME = Not Available
 
 [PRJ PATH]
 #begin
-PATH = e:\soc ti83+\diffequ\
+PATH = e:\ti83+\diffequ\diffequ\
 #end
 
 [FILES]
@@ -44,7 +44,7 @@ SOURCE = main.asm
 
 [DEPENDENCIES]
 #begin
-DEP = e:\soc ti83+\ti83plus.inc
+DEP = e:\ti83+\diffequ\ti83plus.inc
 DEP = euler.asm
 DEP = runge-kutta.asm
 DEP = slopefield.asm
