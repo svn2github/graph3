@@ -6,245 +6,244 @@
 ;y*		<-> X*T
 ;yi*		<-> Y*T
 
-euler:
-	push de
-	rst rOP1TOOP2
-	ld a,X0
-	B_CALL RclSysTok
-	B_CALL OP1ExOP2
-	B_CALL FPSub
-	rst rPUSHREALO1
+function(Euler):
+	push	de
+	rst	08h ;rOP1TOOP2
+	ld	a,X0
+	bcall	_RclSysTok
+	bcall	_OP1ExOP2
+	bcall	_FPSub
+	rst	18h ;rPUSHREALO1
 	;calculated X-X0
-	pop de
-	ld d,1
-	push de
-	call euler_check_cache
-	jr z,euler_init_check_cache;cache usefull
-	B_CALL PopRealO1 ;get rid of cache-X0
-	pop de
-	ld d,2*9+1
-	push de
-	call euler_check_cache
-	jr nz,euler_init_X0
-	jr euler_init_cache
+	pop	de
+	ld	d,1
+	push	de
+	call	@CheckCache
+	jr	z,@InitCheckCache	;cache useful
+	bcall	_PopRealO1		;get rid of cache-X0
+	pop	de
+	ld	d,2*9+1
+	push	de
+	call	@CheckCache
+	jr	nz,@InitX0
+	jr	@InitCache
 
-euler_init_check_cache:
-	B_CALL PopRealO1 ;get cache-X0
-	B_CALL PopRealO2 ;get X-X0
-	rst rPUSHREALO1
-	pop de
-	ld d,2*9+1
-	push de
-	call euler_check_cache
-	jr z,euler_init_cache
-	pop de
-	ld d,1
-	push de
-	B_CALL PopRealO1
-	B_CALL PopRealO1
-	rst rPUSHREALO1
-	rst rPUSHREALO1;make the top of the stack the correct cache-X0 value
+@InitCheckCache:
+	bcall	_PopRealO1		;get cache-X0
+	bcall	_PopRealO2		;get X-X0
+	rst	18h ;rPUSHREALO1
+	pop	de
+	ld	d,2*9+1
+	push	de
+	call	@CheckCache
+	jr	z,@InitCache
+	pop	de
+	ld	d,1
+	push	de
+	bcall	_PopRealO1
+	bcall	_PopRealO1
+	rst	18h ;rPUSHREALO1
+	rst	18h ;rPUSHREALO1	;make the top of the stack the correct cache-X0 value
 	;use cache as startingpoint
-euler_init_cache:
+@InitCache:
 	;set (variable) X and FPST
-	pop de
-	push de
-	call euler_lookup_cache
-	pop de
-	push de
-	ld e,d
-	ld d,0
-	add hl,de
-	rst rMOV9TOOP1
-	push hl
-	call StoT
-	B_CALL PopRealO2
-	B_CALL PopRealO1
-	pop hl
-	rst rMOV9TOOP1
-	rst rPUSHREALO1
-	jr euler_init_registers
-euler_init_X0:
+	pop	de
+	push	de
+	call	@LookupCache
+	pop	de
+	push	de
+	ld	e,d
+	ld	d,0
+	add	hl,de
+	rst	20h ;rMOV9TOOP1
+	push	hl
+	call	StoT
+	bcall	_PopRealO2
+	bcall	_PopRealO1
+	pop	hl
+	rst	20h ;rMOV9TOOP1
+	rst	18h ;rPUSHREALO1
+	jr	@InitRegisters
+@InitX0:
 	;set (variable) X and FPST
-	ld a,X0
-	B_CALL RclSysTok
-	call StoT
-	pop de
-	push de
-	call load_yi0
-	B_CALL PopRealO2
-	B_CALL PopRealO2
-	rst rPUSHREALO1
-euler_init_registers:;doesn't depend on X0/cache choice
-	ld a,Xstep
-	B_CALL RclSysTok
-	B_CALL OP1ExOP2
-	B_CALL FPDiv
-	ld hl,OP1
-	ld a,(hl)
-	and 80h
-	pop de
-	ld d,a;store sign next to equ nr
-	push de
-	res 7,(hl)
-	B_CALL ConvOP1
+	ld	a,X0
+	bcall	_RclSysTok
+	call	StoT
+	pop	de
+	push	de
+	call	LoadYi0
+	bcall	_PopRealO2
+	bcall	_PopRealO2
+	rst	18h ;rPUSHREALO1
+@InitRegisters:			;doesn't depend on X0/cache choice
+	ld	a,Xstep
+	bcall	_RclSysTok
+	bcall	_OP1ExOP2
+	bcall	_FPDiv
+	ld	hl,OP1
+	ld	a,(hl)
+	and	80h
+	pop	de
+	ld	d,a			;store sign next to equ nr
+	push	de
+	res	7,(hl)
+	bcall	_ConvOP1
 	;DE=(X-?)/Xstep -> aantal stappen (?=X0 or ?=cache
-	pop bc
-	push de
-	push bc
-	pop de
-	pop bc
-	ld a,b
-	or c
-	jr z,euler_loop_skip
-	push bc
-	push de
+	pop	bc
+	push	de
+	push	bc
+	pop	de
+	pop	bc
+	ld	a,b
+	or	c
+	jr	z,@LoopSkip
+	push	bc
+	push	de
 
-
-euler_loop_start:
+@LoopStart:
 	;FPS=FPS(+-)Y*(X)*Xstep (forward or reverse euler)
-	pop de
-	push de
-	call load_equation
-	B_CALL ParseInp
-	B_CALL CkOP1Real
-	jr nz,parser_hook_argument_error
-	rst rOP1TOOP2
-	ld a,Xstep
-	B_CALL RclSysTok
-	B_CALL FPMult
-	rst rOP1TOOP2
-	B_CALL PopRealO1
-	pop af
-	push af
-	or a
-	jr z,euler_loop_add1
-	B_CALL FPSub
-	jr euler_loop_sub1
-euler_loop_add1:
-	rst rFPADD
-euler_loop_sub1:
-	rst rPUSHREALO1
+	pop	de
+	push	de
+	call	LoadEquation
+	bcall	_ParseInp
+	bcall	_CkOP1Real
+	jp	nz,ParserHook@ArgumentError
+	rst	08h ;rOP1TOOP2
+	ld	a,Xstep
+	bcall	_RclSysTok
+	bcall	_FPMult
+	rst	08h ;rOP1TOOP2
+	bcall	_PopRealO1
+	pop	af
+	push	af
+	or	a
+	jr	z,@LoopAdd1
+	bcall	_FPSub
+	jr	@LoopSub1
+@LoopAdd1:
+	rst	30h ;rFPADD
+@LoopSub1:
+	rst	18h ;rPUSHREALO1
 	;X=X(+-)Xstep (forward or reverse euler)
-	ld a,Xstep
-	B_CALL RclSysTok
-	rst rOP1TOOP2
-	call RclT
-	pop af
-	push af
-	or a
-	jr z,euler_loop_add2
-	B_CALL FPSub
-	jr euler_loop_sub2
-euler_loop_add2:
-	rst rFPADD
-euler_loop_sub2:
-	call StoT
+	ld	a,Xstep
+	bcall	_RclSysTok
+	rst	08h ;rOP1TOOP2
+	call	RclT
+	pop	af
+	push	af
+	or	a
+	jr	z,@LoopAdd2
+	bcall	_FPSub
+	jr	@LoopSub2
+@LoopAdd2:
+	rst	30h ;rFPADD
+@LoopSub2:
+	call	StoT
 
 	;save calculated value in cache
-	pop de
-	push de
-	call euler_lookup_cache
-	ld a,(hl)
-	xor cacheSwitchMask
-	bit cacheSwitchBit,a
-	jr z,euler_loop_cache1
-	or cache2ValidMask
-	ld (hl),a
-	ld de,2*9+1
-	add hl,de;skip first cache
-	jr euler_loop_cache2
-euler_loop_cache1:
-	or cache1ValidMask
-	ld (hl),a
-	inc hl
-euler_loop_cache2:
-	push hl
-	call RclT
-	B_CALL CpyTo2FPST
-	pop de
-	ld hl,OP1
-	call Mov9
-	ld hl,OP2
-	call Mov9
+	pop	de
+	push	de
+	call	@LookupCache
+	ld	a,(hl)
+	xor	cacheSwitchMask
+	bit	cacheSwitchBit,a
+	jr	z,@LoopCache1
+	or	cache2ValidMask
+	ld	(hl),a
+	ld	de,2*9+1
+	add	hl,de			;skip first cache
+	jr	@LoopCache2
+@LoopCache1:
+	or	cache1ValidMask
+	ld	(hl),a
+	inc	hl
+@LoopCache2:
+	push	hl
+	call	RclT
+	bcall	_CpyTo2FPST
+	pop	de
+	ld	hl,OP1
+	call	Mov9
+	ld	hl,OP2
+	call	Mov9
 
-	pop de
-	pop bc
-	dec bc
-	ld a,b
-	or c
-	push bc
-	push de
-	jr nz,euler_loop_start
+	pop	de
+	pop	bc
+	dec	bc
+	ld	a,b
+	or	c
+	push	bc
+	push	de
+	jr	nz,@LoopStart
 	;done final loop
 	
-	pop de
-	pop bc
-euler_loop_skip:
-	push de
+	pop	de
+	pop	bc
+@LoopSkip:
+	push	de
 	;check if final iteration is needed
-	call RclT
-	rst rOP1TOOP2
-	B_CALL CpyTo1FPS1
-	B_CALL FPSub
-	ld a,(OP1+2)
-	or a
-	jr z,euler_skip_final
+	call	RclT
+	rst	08h ;rOP1TOOP2
+	bcall	_CpyTo1FPS1
+	bcall	_FPSub
+	ld	a,(OP1+2)
+	or	a
+	jr	z,@SkipFinal
 
-	rst rPUSHREALO1
-	pop de
-	push de
-	call load_equation
-	B_CALL ParseInp
-	B_CALL CkOP1Real
-	jr nz,parser_hook_argument_error
-	B_CALL PopRealO2
-	B_CALL FPMult
-	B_CALL PopRealO2
-	rst rFPADD
-	rst rPUSHREALO1
+	rst	18h ;rPUSHREALO1
+	pop	de
+	push	de
+	call	LoadEquation
+	bcall	_ParseInp
+	bcall	_CkOP1Real
+	jp	nz,ParserHook@ArgumentError
+	bcall	_PopRealO2
+	bcall	_FPMult
+	bcall	_PopRealO2
+	rst	30h ;rFPADD
+	rst	18h ;rPUSHREALO1
 
-euler_skip_final:
-	B_CALL PopRealO2
-	pop de
+@SkipFinal:
+	bcall	_PopRealO2
+	pop	de
 	ret
 
-euler_check_cache:;checks whether using the cache is usefull
+function(Euler@CheckCache):	;checks whether using the cache is usefull
 	;E contains equ number
 	;D contains nr of bytes to skip 1=first cache , 19=2nd cache
-	push de
-	call euler_lookup_cache
-	pop de
-	ld a,d
-	dec a
-	ld a,(hl)
-	jr z,$f
-	rra ;shift cache 2 bit to place of cache 1
-$$:
-	and cache1ValidMask
-	xor cache1ValidMask
-	push af;save for after push on FPS
-	ld e,d
-	ld d,0
-	add hl,de
-	rst rMOV9TOOP1
-	rst rOP1TOOP2
-	B_CALL CpyTo1FPS1;X0
-	B_CALL FPSub
-	rst rPUSHREALO1
-	pop af
-	ret nz;cache was not valid
+	push	de
+	call	Euler@LookupCache
+	pop	de
+	ld	a,d
+	dec	a
+	ld	a,(hl)
+	jr	z,@ZDSf
+	rra				;shift cache 2 bit to place of cache 1
+@ZDSf:
+	and	cache1ValidMask
+	xor	cache1ValidMask
+	push	af			;save for after push on FPS
+	ld	e,d
+	ld	d,0
+	add	hl,de
+	rst	20h ;rMOV9TOOP1
+	rst	08h ;rOP1TOOP2
+	bcall	_CpyTo1FPS1		;X0
+	bcall	_FPSub
+	rst	18h ;rPUSHREALO1
+	pop	af
+	ret	nz			;cache was not valid
 	;calculated Cache-X0
-	ld a,(OP1+2)
-	or a
-	ret z;result is in cache
-	B_CALL CpyTo2FPS1
-	call same_sign
-	ret nz;only going farther from X0 using cache
-	B_CALL FPSub
-	B_CALL CpyTo2FPST
-	call same_sign
-	xor 80h
+	ld	a,(OP1+2)
+	or	a
+	ret	z			;result is in cache
+	bcall	_CpyTo2FPS1
+	call	SameSign
+	ret	nz			;only going farther from X0 using cache
+	bcall	_FPSub
+	bcall	_CpyTo2FPST
+	call	SameSign
+	xor	80h
 	;NZ if X0 is closer
 	ret
 
@@ -266,18 +265,18 @@ eulerCacheSize equ eulerCacheBlockSize*6 ;Y1..Y6
 ;37		Cache Block for Y5
 ;37		Cache Block for Y6
 
-euler_lookup_cache:
+function(Euler@LookupCache):
 ;E contains equation number
-	push de
-	call LookupAppVar
-	ex de,hl
-	ld de,2-(eulerCacheBlockSize)+simpleCacheSize;leave simple cache available for slopefield use
-	add hl,de
-	ld de,eulerCacheBlockSize
-	pop bc
-	ld b,c
-	inc b
-$$:
-	add hl,de
-	djnz $b
+	push	de
+	call	LookupAppVar
+	ex	de,hl
+	ld	de,2-(eulerCacheBlockSize)+simpleCacheSize	;leave simple cache available for slopefield use
+	add	hl,de
+	ld	de,eulerCacheBlockSize
+	pop	bc
+	ld	b,c
+	inc	b
+@ZDSb:
+	add	hl,de
+	djnz	@ZDSb
 	ret
