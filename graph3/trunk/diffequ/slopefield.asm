@@ -2,6 +2,8 @@ function(SlopeField):
 	call	LoadStatusAddress
 	bit	SlopeFldBit,(hl)
 	ret	z
+	bit	RealEquBit,(hl)
+	ret	z
 	inc	hl
 	ld	d,(hl)
 	call	CountEquations
@@ -25,11 +27,7 @@ function(SlopeField):
 	;FPS=[X,...]
 
 	;Setup simple cache
-	call	LoadStatusAddress
-	ld	a,(hl)
-	set	EulerBit,(hl)	;set RK mode
 	pop	ix
-	push	af
 	AppOnErr(@ErrorHandler)
 	push	ix
 
@@ -139,10 +137,10 @@ function(SlopeField):
 	bcall	_PopRealO1
 	ld	hl,$257F		;.25
 	call	LoadOP2
-	bcall	_FPMult 
+	bcall	_FPMult
 	bcall	_OP1ToOP6		;OP6=PlotLength = PlotLength/4
 	bcall	_CpyTo2FPST
-	bcall	_FPMult 
+	bcall	_FPMult
 	bcall	_OP1ToOP5		;OP5=PlotLength*Derivative
 
 	call	RclT
@@ -150,7 +148,7 @@ function(SlopeField):
 	bcall	_OP6ToOP2		;PlotLength
 	bcall	_FPSub
 	bcall	_OP1ToOP3		;OP3=X-PlotLength
-	
+
 	bcall	_OP4ToOP1		;X
 	bcall	_OP6ToOP2		;PlotLength
 	rst	30h ;rFPADD
@@ -168,14 +166,14 @@ function(SlopeField):
 
 	bcall	_OP6ToOP1		;X+PlotLength
 
-	bcall	_CLine	
+	bcall	_CLine
 ;Line(Y-PlotLength*Derivative,
 ;     X+PlotLength,Y+PlotLength*Derivative)
 
 	ld	de,9
 	bcall	_DeallocFPS1	;FPS=[Y,Y_StepSize,X_StepSize,X,...]
 
-@ContinueParser:	
+@ContinueParser:
 	bcall	_PopRealO1
 	bcall	_CpyTo2FPST
 	bcall	_FPSub
@@ -201,12 +199,6 @@ function(SlopeField):
 @Continue:
 	call	LoadSimpleCacheAddress
 	res	cacheSimpleValidBit,(hl)
-	pop	af
-	bit	EulerBit,a
-	jr	nz,@ZDSf3
-	call	LoadStatusAddress
-	res	EulerBit,(hl)
-@ZDSf3:
 	bcall	_PopRealO1
 	call	StoT
 	ret
@@ -218,24 +210,27 @@ function(SlopeField):
 	bcall	_OP1Set0
 	jp	@ContinueRclT
 
+@StoreY:
+	rst	18h ;rPUSHREALO1
+	call	RclT
+	bcall	_OP1ToOP6
+	call	LoadRKEvalAddress
+	ld	d,(hl)
+	call	Runge@SaveYCaches
+	ret
+
 @ErrorHandler:
 	ld	b,a
 	and	$7F
 	cp	8			;only ignore the first errors
 	jr	c,@Continue
 @JumpError:
-	pop	af
-	ld	c,a
 	push	bc
 	call	LoadSimpleCacheAddress
 	res	cacheSimpleValidBit,(hl)
 	ld	de,StatusOffset-2
 	add	hl,de
 	pop	bc
-	bit	EulerBit,c
-	jr	nz,@ZDSf4
-	res	EulerBit,(hl)
-@ZDSf4:
 	jp	DisplayOriginalError
 
 @ParserErrorHandler:
@@ -244,14 +239,5 @@ function(SlopeField):
 	cp	6			;ON:BREAK
 	jr	z,@JumpError
 	cp	8			;only ignore the first errors
-	jp	c,@ContinueParser
+	jr	c,@ContinueParser
 	jr	@JumpError
-
-function(SlopeField@StoreY):
-	rst	18h ;rPUSHREALO1
-	call	RclT
-	bcall	_OP1ToOP6
-	call	LoadRKEvalAddress
-	ld	d,(hl)
-	call	Runge@SaveYCaches
-	ret

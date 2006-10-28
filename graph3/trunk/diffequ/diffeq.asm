@@ -88,7 +88,7 @@ function(ParserHook):
 	jr	nz,@Return
 	ld	a,l
 	dec	a
-	dec	a 
+	dec	a
 	or	h			;only Z for HL=2
 	jr	z,@Real
 @Return:
@@ -128,8 +128,35 @@ function(ExecuteDiffequAlgorithm):
 	pop	de
 	ld	d,(hl)
 	push	de
+	bit	RealEquBit,d
+	jr	z,@DataTypeError	;bomb out when the equations aren't real
+
 	call	RclT
 	rst	18h ;rPUSHREALO1	;save X
+
+	call	LoadSimpleCacheAddress
+	push	hl
+	B_CALL _CpyTo1FPST	;X
+	pop	hl
+	bit	cacheSimpleValidBit,(hl)
+	jr	z,@SkipSimpleCache
+	inc	hl
+	push	hl
+	bcall	_Mov9OP2Cp
+	pop	hl
+	jr	nz,@SkipSimpleCache
+	push	hl
+	ld	de,9
+	bcall	_DeallocFPS1
+	pop	hl
+	pop	de
+	dec	e			;skip X
+	call	Runge@HLPlusCacheOffset
+	rst	20h ;rMOV9TOOP1
+	or	$FF
+	ret
+
+@SkipSimpleCache:
 	pop	ix
 	push	ix
 	AppOnErr(@Error)
@@ -140,7 +167,7 @@ function(ExecuteDiffequAlgorithm):
 	call	Euler
 @Finish:
 	AppOffErr
-	pop	ix 
+	pop	ix
 	bcall	_PopRealO1
 	call	StoT
 	bcall	_OP2ToOP1
@@ -150,17 +177,21 @@ function(ExecuteDiffequAlgorithm):
 	call	Runge
 	jr	@Finish
 
+@DataTypeError:
+	ld	a,9			;datatype error without goto option
+	bjump	_JError
+
 @Error:
 	pop	de
 	push	af
 	bit	EulerBit,d
-	call	nz,ClearCache;Simple erase cache in case of RK
+	call	nz,ClearCache	;Simple erase cache in case of RK
 	bcall	_PopRealO1
 	call	StoT
 	pop	af
 	ld	b,a
 	and	$7F
-	cp	6		;ON:BREAK
+	cp	6			;ON:BREAK
 	jr	z,DisplayError
 DisplayOriginalError:
 	ld	a,b
@@ -246,51 +277,7 @@ function(AppChangeHook):
 
 function(AppChangeHook@ExitYEqu):
 	AppOnErr(RemoveGotoErrorHandler)
-	ld	e,0
-@Loop:
-	push	de
-	;Dis/Enable Y* function	re
-	call	LoadEquation
-	rst	10h ;rFINDSYM
-	ld	a,(hl)
-	and	1<<5			;the bit that dis/enables an equation
-	pop	de
-	push	de
-	push	af
-	call	LoadYEquation
-	rst	10h ;rFINDSYM
-	ld	a,(hl)
-	res	5,a
-	pop	bc
-	or	b			;dis/enable equation
-	ld	(hl),a
-	pop	de
-	push	de
-	;Update initial value
-	ld	a,1
-	call	LoadEquation@2
-	AppOnErr(@Skip)
-	bcall	_ParseInp
-	AppOffErr
-	bcall	_CkOP1Real
-	jr	nz,@Skip		;don't save
-	bcall	_OP1ToOP6
-	pop	de
-	push	de 
-	ld	a,1
-	call	LoadEquation@2
-	rst	10h ;rFINDSYM
-	bcall	_SetEmptyEditPtr
-	bcall	_OP6ToOP1
-	bcall	_OP1ToEdit
-	bcall	_CloseEditEqu
-@Skip:
-	pop	de
-	inc	e
-	ld	a,6			;0..5
-	cp	e
-	jr	nz,@Loop
-	bcall	_CleanAll
+
 	;figure out which equations need to be evaluated in RK mode
 	ld	de,0
 @Loop2:
@@ -307,17 +294,122 @@ function(AppChangeHook@ExitYEqu):
 	jr	nz,@Loop2
 	;store which equations need to be evaluated in RK mode
 	push	de
-	call	LookupAppVar 
+	call	LookupAppVar
 	push	de
 	pop	bc
 	ld	hl,RKEvalOffset
 	add	hl,de
 	pop	de
 	ld	(hl),d
+	push	de
+
 	;Erase cache if smart graph can't be used
 	bit	smartGraph_inv,(iy+smartFlags)
 	call	nz,ClearCache
+
+	call	LoadSimpleCacheAddress
+	res	cacheSimpleValidBit,(hl)
+	;fill simple cache with T
+	call	LoadSimpleCacheAddress
+	set	cacheSimpleValidBit,(hl)
+	inc	hl
+	push	hl
+	bcall	_OP1Set0
+	call	StoT
+	pop	de
+	ld	b,7
+@ZDSb9:
+	push	bc
+	ld	hl,OP1
+	call	Mov9
+	pop	bc
+	djnz	@ZDSb9
+	call	LoadStatusAddress
+	set	RealEquBit,(hl)
+
+	pop	de
+	ld	e,0
+@Loop:
+	push	de
+	;Dis/Enable Y* function
+	call	LoadEquation
+	rst	10h ;rFINDSYM
+	ld	a,(hl)
+	and	1<<5			;the bit that dis/enables an equation
+	pop	de
+	push	de
+	push	af
+	call	LoadYEquation
+	rst	10h ;rFINDSYM
+	ld	a,(hl)
+	res	5,a
+	pop	bc
+	or	b			;dis/enable equation
+	ld	(hl),a
+	pop	de
+	push	de
+	;Check that equations returns a real value
+	call	LoadEquation
+	AppOnErr(@SkipEqu)
+	bcall	_ParseInp
 	AppOffErr
+	bit	numOP1,(IY+ParsFlag2)
+	jr	z,@SkipEqu		;don't save
+	bcall	_CkOP1Real
+	pop	de
+	push	de
+	call	nz,@ResetRealEquBit
+@SkipEqu:
+	pop	de
+	push	de
+	;Update initial value
+	ld	a,1
+	call	LoadEquation@2
+	AppOnErr(@SkipInitial)
+	bcall	_ParseInp
+	AppOffErr
+	bit	numOP1,(IY+ParsFlag2)
+	jr	z,@SkipInitial	;don't save
+	bcall	_CkOP1Real
+	pop	de
+	push	de
+	call	nz,@ResetRealEquBit
+	jr	nz,@SkipInitial	;don't save
+	bcall	_OP1ToOP6
+	pop	de
+	push	de
+	ld	a,1
+	call	LoadEquation@2
+	rst	10h ;rFINDSYM
+	bcall	_SetEmptyEditPtr
+	bcall	_OP6ToOP1
+	bcall	_OP1ToEdit
+	bcall	_CloseEditEqu
+@SkipInitial:
+	pop	de
+	inc	e
+	ld	a,6			;0..5
+	cp	e
+	jr	nz,@Loop
+	bcall	_CleanAll
+	AppOffErr
+	ret
+
+@ResetRealEquBit:			;FIX: make sure this is only called when enabled/used equations are nonreal
+	push	af
+	ld	b,e
+	inc	b
+	rlc	d
+@ZDSb8:
+	rrc	d
+	djnz	@ZDSb8
+
+	bit	0,d
+	jr	z,@ZDSf8
+	call	LoadStatusAddress
+	res	RealEquBit,(hl)
+@ZDSf8:
+	pop	af
 	ret
 
 @CheckEqu:
@@ -365,7 +457,7 @@ function(AppChangeHook@ExitYEqu):
 	pop	de
 	call	@CheckEqu
 	pop	hl
-	pop	bc	
+	pop	bc
 @CheckEquNotY:
 	dec	hl
 	ld	a,(hl)
@@ -700,7 +792,7 @@ function(WindowHook):	;PORTED
 	or	a
 	jr	z,@NoError
 @Error:
-	bjump	_ErrDomain 
+	bjump	_ErrDomain
 @NoError:
 	pop	af
 	call	@LoadValueAddress
@@ -718,6 +810,7 @@ function(WindowHook):	;PORTED
 	dec	a
 	jr	nz,@Not7
 	call	LoadStatusAddress
+	ld	a,(hl)
 	ld	hl,@TablePointers
 	bit	EulerBit,a
 	jr	z,@ZDSf1
@@ -913,13 +1006,13 @@ function(ModeHook):
 
 	ld	de,saveStuff
 	ld	hl,curRow
-	ldi 
+	ldi
 	ldi
 	ld	hl,flags + textFlags
 	ldi
 	ld	hl,cursorHookPtr
-	ldi 
-	ldi 
+	ldi
+	ldi
 	ldi
 	ld	hl,flags + $34
 	ldi
@@ -1022,59 +1115,59 @@ function(ModeHook):
 
 @Table:
 	.db	%00000101
-	.dw tRectG,  flags + grfDBFlags	
+	.dw tRectG,  flags + grfDBFlags
 	.db 1<<grfPolar,0	,0
 
 	.db	%00000110
-	.dw tPolarG,  flags + grfDBFlags	
+	.dw tPolarG,  flags + grfDBFlags
 	.db 1<<grfPolar,1<<grfPolar	,0
 
 	.db	%00001101
-	.dw tCoordOn,  flags + grfDBFlags			
+	.dw tCoordOn,  flags + grfDBFlags
 	.db 1<<grfNoCoord,0	,0
 
 	.db	%00001110
-	.dw tCoordOff,  flags + grfDBFlags			
+	.dw tCoordOff,  flags + grfDBFlags
 	.db 1<<grfNoCoord,1<<grfNoCoord	,0
 
 	.db	%00001101
-	.dw tGridOff,  flags + grfDBFlags			
+	.dw tGridOff,  flags + grfDBFlags
 	.db 1<<grfGrid,0	,1
 
 	.db	%00001110
-	.dw tGridOn,  flags + grfDBFlags			
+	.dw tGridOn,  flags + grfDBFlags
 	.db 1<<grfGrid,1<<grfGrid	,1
 
 	.db	%00001101
-	.dw tAxisOn,  flags + grfDBFlags			
+	.dw tAxisOn,  flags + grfDBFlags
 	.db 1<<grfNoAxis,0	,1
 
 	.db	%00001110
-	.dw tAxisOff,  flags + grfDBFlags			
+	.dw tAxisOff,  flags + grfDBFlags
 	.db 1<<grfNoAxis,1<<grfNoAxis	,1
 
 	.db	%00001101
-	.dw tLblOff,  flags + grfDBFlags			
+	.dw tLblOff,  flags + grfDBFlags
 	.db 1<<grfLabel,0	,0
 
 	.db	%00001110
-	.dw tLblOn,  flags + grfDBFlags			
+	.dw tLblOn,  flags + grfDBFlags
 	.db 1<<grfLabel,1<<grfLabel	,0
 
 	.db	%00001101
-	.dw @Strings_Euler,  _Flags			
+	.dw @Strings_Euler,  _Flags
 	.db 1<<EulerBit,0	,2
 
 	.db	%00001110
-	.dw @Strings_RungeKutta,  _Flags			
+	.dw @Strings_RungeKutta,  _Flags
 	.db 1<<EulerBit,1<<EulerBit	,2
 
 	.db	%00001001
-	.dw @Strings_NoField,  _Flags			
+	.dw @Strings_NoField,  _Flags
 	.db 1<<SlopeFldBit,0	,1
 
 	.db	%00001010
-	.dw @Strings_Field,  _Flags			
+	.dw @Strings_Field,  _Flags
 	.db 1<<SlopeFldBit,1<<SlopeFldBit	,1
 
 @Strings_Euler:
@@ -1104,13 +1197,13 @@ function(ModeHook):
 
 	ld	hl,saveStuff
 	ld	de,curRow
-	ldi 
+	ldi
 	ldi
 	ld	de,flags + textFlags
 	ldi
 	ld	de,cursorHookPtr
-	ldi 
-	ldi 
+	ldi
+	ldi
 	ldi
 	ld	de,flags + $34
 	ldi
@@ -1420,16 +1513,16 @@ function(PutsApp):		;PORTED
 	ret
 
 function(ClearCache):
-	call LookupAppVar
-	ex de,hl
-	inc hl
-	inc hl
-	ld bc,rungeCacheSize
+	call	LookupAppVar
+	ex	de,hl
+	inc	hl
+	inc	hl
+	ld	bc,CacheSize
 	bcall	_MemClear
 	ret
 
 function(Mov9):			;PORTED
-	ldi 
+	ldi
  	ldi
 	ldi
 	ldi
@@ -1450,7 +1543,7 @@ function(CreateAppvar):		;PORTED
 	inc	de
 	inc	de
 	ex	de,hl
-	ld	bc,rungeCacheSize
+	ld	bc,CacheSize
 	push	hl
 	push	bc
 	bcall	_MemClear
@@ -1506,7 +1599,7 @@ function(CreateEquations):
 @Loop2:
 	push	bc
 	push	hl
-	
+
 	call	LookupAppVar
 	push	de
 	ld	hl,equation
@@ -1603,6 +1696,7 @@ function(SetupCalc):
 	call	CreateEquations
 	AppOffErr
 	call	EnableEquations
+	bcall	_SetTblGraphDraw	;dirty graph and table
 	ret
 
 @Error:	;Memory is full, error during CreateEqu
@@ -1611,14 +1705,14 @@ function(SetupCalc):
 	pop	af
 	res	7,a
 	jp	DisplayError
-	
+
 
 function(RestoreCalc):
 	call	SaveParamEquations
 	call	SaveEnabledEquations
 @NoSave:
 	xor	a
-	ld	(iy+$35),a		;FIX: restore hooks instead of deleting them
+	ld	(iy+$35),a
 	ld	(iy+$36),a		;disable hooks
 	ld	(YEquHookState),a	;not in diffequ mode anymore
 	call	DeleteEquations
@@ -1810,7 +1904,7 @@ function(RestoreEquations):
 	ld	a,tY6+10+1
 	cp	c
 	jr	nz,@Loop1
-	ld	c,twn+1 
+	ld	c,twn+1
 @Loop2:
 	ld	a,c
 	sub	twn-tX1T+1		;X1T<-w(n)+1
@@ -1853,7 +1947,7 @@ function(SetCalcSpeed):
  	pop	bc
  	pop	af
  	ret
- 
+
 function(LookupAppVar):		;PORTED
 	ld	hl,AppvarName
 	rst	20h
@@ -1893,14 +1987,6 @@ function(LoadEquation):
 equation:
 	.db EquObj, tVarEqu, tX1T,0
 
-function(MultABy9):		;destroys B
-	ld	b,a
-	add	a,a
-	add	a,a
-	add	a,a
-	add	a,b
-	ret
-
 function(CountEquations):	;returns the number of active equations in d
 	xor	a
 	ld	b,6
@@ -1924,7 +2010,7 @@ function(LoadYEquation):
 	rst	20h ;rMOV9TOOP1
 	ld	(OP1+2),a
 	ret
-	
+
 function(LoadFldres):
 	call	LookupAppVar
 	ld	hl,FldresOffset
@@ -1950,7 +2036,7 @@ function(LoadRKEvalAddress):
 	ld	hl,RKEvalOffset
 	add	hl,de
 	ret
-	
+
 function(LoadStyleAddress):
 	call	LookupAppVar
 	ld	hl,StyleOffset
@@ -2031,10 +2117,11 @@ simpleCacheSize	= 1+7*9 ;X and Y1..Y6
 ;10..63	Y6..Y1 (reverse order!)
 
 
-rungeCacheSize	= simpleCacheSize + endpointCacheSize
+CacheSize		= simpleCacheSize + rungeCacheSize
 
 ;APPVAR
-;316		Cache (size of runge cache, always starts with SimpleCache)
+;64		SimpleCache
+;252		Cache (size of runge cache)
 ;1			Statusbits
 ;1			Equations to be evaluated in RK mode
 ;1			Equations that are enabled
@@ -2042,38 +2129,39 @@ rungeCacheSize	= simpleCacheSize + endpointCacheSize
 ;6			Graph style of X*T
 ;?			equations
 
-AppvarInitSize 	= rungeCacheSize + appvarInitDataLength + appVarGraphStylesLength + appVarInitEquationsLength
+AppvarInitSize 	= CacheSize + appvarInitDataLength + appVarGraphStylesLength + appVarInitEquationsLength
 			;runge cache is larger than euler cache
 
-StatusOffset	= 2 + rungeCacheSize
-RKEvalOffset	= 2 + rungeCacheSize + 1
-EnabledOffset	= 2 + rungeCacheSize + 2
-DiftolOffset	= 2 + rungeCacheSize + 3
-FldresOffset	= 2 + rungeCacheSize + 3 + 9
-StyleOffset		= 2 + rungeCacheSize + 3 + 9 + 9
-EquOffset		= 2 + rungeCacheSize + 3 + 9 + 9 + appVarGraphStylesLength
+StatusOffset	= 2 + CacheSize
+RKEvalOffset	= 2 + CacheSize + 1
+EnabledOffset	= 2 + CacheSize + 2
+DiftolOffset	= 2 + CacheSize + 3
+FldresOffset	= 2 + CacheSize + 3 + 9
+StyleOffset		= 2 + CacheSize + 3 + 9 + 9
+EquOffset		= 2 + CacheSize + 3 + 9 + 9 + appVarGraphStylesLength
 
 ;STATUSBITS
 EulerBit		= 0	;0=euler, 1=RK
 SlopeFldBit		= 1	;0=no slope field 1=draw slope field
+RealEquBit		= 2	;0=an equation returns a non-real value (usually a list)
+				;1=all equations return a real value
 SimultBit		= 6	;Copy of the simultaneous/sequential bit
 ExprBit		= 7	;Copy of the ExprOn/Off bit
 
 end_of_app:
 app_size = end_of_app-4080h
 
-
+;FIX:restore hooks instead of deleting them
 ;--------------------------------MAYBE LATER--------------------------------
 ;CLEANUP: Use variable used during graphing to support smart graph
 ;FIX:implement our own version of tmin,tstep and tmax with more sensible default values for diffequs
 ;FIX:implement expron/exproff? (problems with either putting it on top of equ nr in upper right corner or disappearing)
 ;FIX:implement Initial Condition chooser on graph
 ;FIX:disallow y1(..) calls inside ODE's (Only work inside table, don't like modifying equations)
+;FIX:disallow lists inside ODE's (can't get list graphing to work correctly with rungekutta, euler works mostly when parsflags IY+6&7 are backed up.)
 ;FIX:disallow recalling Y1..Y6 in diffequ mode (difficult,not worth it)
 
 
 ;Y= Screen
 ;* Use only one line to display result, followed by ...
 ;* When switching away make errors behave like the window screen
-
-;FIX: add fast speed set back in to hooks where it is required

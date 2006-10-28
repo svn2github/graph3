@@ -176,7 +176,7 @@ function(Euler):
 	push	de
 	jr	nz,@LoopStart
 	;done final loop
-	
+
 	pop	de
 	pop	bc
 @LoopSkip:
