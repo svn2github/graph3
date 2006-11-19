@@ -238,5 +238,20 @@ function(Init):
 	cp	e
 	ret
 
+;Some functions used in both 3d and diffequ mode
+function(PutsApp):
+      rst   20h
+      ld    hl,OP1
+      bcall _PutS
+      ret
+
+function(Mov9ToOP2):
+	ld    de,OP2
+Mov9:
+	ldi \ ldi \ ldi
+	ldi \ ldi \ ldi
+	ldi \ ldi \ ldi
+	ret
+
 ;Include 3D functionality
 #include "3d/mainhook.asm"

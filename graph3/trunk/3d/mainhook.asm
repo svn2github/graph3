@@ -519,14 +519,6 @@ function(GraphErrorHandler):
 	;and   $7F
 	bjump _JError
 
-function(Mov9ToOP2):
-	ld    de,OP2
-Mov9:
-	ldi \ ldi \ ldi
-	ldi \ ldi \ ldi
-	ldi \ ldi \ ldi
-	ret
-
 function(ConvertOP1):
 	ld    hl,OP1
 	ld    a,(hl)

@@ -88,12 +88,6 @@ function(Quit):
 JumpHL:
       jp    (hl)
 
-function(PutsApp):
-      rst   20h
-      ld    hl,OP1
-      bcall _PutS
-      ret
-
 function(VPutsCenter):
       ld    b,0
       ld    de,OP1+1

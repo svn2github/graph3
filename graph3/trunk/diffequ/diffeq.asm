@@ -632,7 +632,7 @@ function(YeditHook):
 	xor	a
 	ret
 
-function(MenuHook):		;PORTED
+function(MenuHook):		;PORTED (changed)
 	.db	$83
 	call	SetCalcSpeed
 	or	a
@@ -667,7 +667,7 @@ function(MenuHook):		;PORTED
 	xor	a
 	ret
 
-CalcMenu:				;PORTED
+CalcMenu:
 	.db 1		;how many headers?
 	.db 1 	;how many choices under 1st header?
 	.db $24	;string table entry for "CALCULATE"
@@ -701,7 +701,7 @@ YEquMenu:
 	.db kExtendEcho2,kY5
 	.db kExtendEcho2,kY6
 
-function(WindowHook):	;PORTED
+function(WindowHook):	;PORTED (changed to support different menus, 3d functionality should be possible using this function)
 	.db	$83
 	call	SetCalcSpeed
 	push	af
@@ -989,7 +989,7 @@ function(WindowHook):	;PORTED
 @FldResIdentifier	= (-2) & 255
 @Identifier		= (-2-9) & 255 ;first identifier that's not a system variable token
 
-;;;;;;;;;;;;;;;;Start of ModeHook PORTED from graph3
+;;;;;;;;;;;;;;;;Start of ModeHook PORTED from graph3 (changed for diffequ, should be able to use this version for 3d functionality)
 
 modeTemp		= appBackUpScreen + 600
 					; 742-749 contains data from saveStuff.. i was stupid
@@ -1506,12 +1506,6 @@ CursorHook:
 
 ;;;;;;;;;;;;;;;;
 
-function(PutsApp):		;PORTED
-	rst	20h
-	ld	hl,OP1
-	bcall	_PutS
-	ret
-
 function(ClearCache):
 	call	LookupAppVar
 	ex	de,hl
@@ -1521,19 +1515,7 @@ function(ClearCache):
 	bcall	_MemClear
 	ret
 
-function(Mov9):			;PORTED
-	ldi
- 	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ret
-
-function(CreateAppvar):		;PORTED
+function(CreateAppvar):		;PORTED (changed here and in 3d, take a look at this when merging)
 	ld	hl,AppvarName
 	rst	20h ;rMOV9TOOP1
 	bcall	_ChkFindSym
@@ -1948,7 +1930,7 @@ function(SetCalcSpeed):
  	pop	af
  	ret
 
-function(LookupAppVar):		;PORTED
+function(LookupAppVar):		;PORTED (called lookupgraph in 3d mode)
 	ld	hl,AppvarName
 	rst	20h
 	bcall	_ChkFindSym
