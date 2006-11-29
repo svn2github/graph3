@@ -35,49 +35,49 @@ GX1				equ 9780h
 YEquHookState		equ 9B98h+3
 
 StartApp:
-	call	CreateAppvar
+	call	DEQ@CreateAppvar
 
 	ld	a,(YEquHookState)
 	cp	$42
-	jr	z,Restore
+	jr	z,DEQ@Restore
 
-	call	SetupCalc
+	call	DEQ@SetupCalc
 
 	in	a,(6)
-	ld	hl,ParserHook
+	ld	hl,DEQ@ParserHook
 	bcall	_EnableParserHook
 
-	ld	hl,AppChangeHook
+	ld	hl,DEQ@AppChangeHook
 	bcall	_EnableAppSwitchHook
 
-	ld	hl,RegraphHook
+	ld	hl,DEQ@RegraphHook
 	bcall	_EnableReGraphHook
 
-	ld	hl,KeyHook
+	ld	hl,DEQ@KeyHook
 	bcall	_EnableRawKeyHook
 
-	ld	hl,MenuHook
+	ld	hl,DEQ@MenuHook
 	bcall	_EnableMenuHook
 
-	ld	hl,WindowHook
+	ld	hl,DEQ@WindowHook
 	bcall	_EnableWindowHook
 
-	ld	hl,GraphHook
+	ld	hl,DEQ@GraphHook
 	bcall	_EnableGraphHook
 
-	ld	hl,YeditHook
+	ld	hl,DEQ@YeditHook
 	bcall	_EnableYEquHook
 
 ExitApp:
 	bjump	_JForceCmdNoChar
 
-Restore:
-	call	RestoreCalc
+DEQ@Restore:
+	call	DEQ@RestoreCalc
 	jr	ExitApp
 
-function(ParserHook):
+function(DEQ@ParserHook):
 	.db	$83
-	call	SetCalcSpeed
+	call	DEQ@SetCalcSpeed
 	or	a
 	jr	z,@Return		;preparser
 	push	hl
@@ -122,19 +122,19 @@ function(ParserHook):
 	jr	nz,@ArgumentError
 	;all checks passed, E contains equation number
 	;fallthrough
-function(ExecuteDiffequAlgorithm):
+function(DEQ@ExecuteDiffequAlgorithm):
 	push	de
-	call	LoadStatusAddress
+	call	DEQ@LoadStatusAddress
 	pop	de
 	ld	d,(hl)
 	push	de
 	bit	RealEquBit,d
 	jr	z,@DataTypeError	;bomb out when the equations aren't real
 
-	call	RclT
+	call	DEQ@RclT
 	rst	18h ;rPUSHREALO1	;save X
 
-	call	LoadSimpleCacheAddress
+	call	DEQ@LoadSimpleCacheAddress
 	push	hl
 	B_CALL _CpyTo1FPST	;X
 	pop	hl
@@ -151,7 +151,7 @@ function(ExecuteDiffequAlgorithm):
 	pop	hl
 	pop	de
 	dec	e			;skip X
-	call	Runge@HLPlusCacheOffset
+	call	DEQ@Runge@HLPlusCacheOffset
 	rst	20h ;rMOV9TOOP1
 	or	$FF
 	ret
@@ -164,17 +164,17 @@ function(ExecuteDiffequAlgorithm):
 	pop	de
 	bit	EulerBit,d
 	jr	nz,@RK
-	call	Euler
+	call	DEQ@Euler
 @Finish:
 	AppOffErr
 	pop	ix
 	bcall	_PopRealO1
-	call	StoT
+	call	DEQ@StoT
 	bcall	_OP2ToOP1
 	or	$FF
 	ret
 @RK:
-	call	Runge
+	call	DEQ@Runge
 	jr	@Finish
 
 @DataTypeError:
@@ -185,9 +185,9 @@ function(ExecuteDiffequAlgorithm):
 	pop	de
 	push	af
 	bit	EulerBit,d
-	call	nz,ClearCache	;Simple erase cache in case of RK
+	call	nz,DEQ@ClearCache	;Simple erase cache in case of RK
 	bcall	_PopRealO1
-	call	StoT
+	call	DEQ@StoT
 	pop	af
 	ld	b,a
 	and	$7F
@@ -198,12 +198,12 @@ DisplayOriginalError:
 DisplayError:
 	bjump	_JError
 
-function(RegraphHook):
+function(DEQ@RegraphHook):
 	.db	$83
-	call	SetCalcSpeed
+	call	DEQ@SetCalcSpeed
 	cp	$09
 	jr	nz,@Not9
-	call	SlopeField
+	call	DEQ@SlopeField
 	jr	@Return
 @Not9:
 	cp	$08
@@ -218,12 +218,12 @@ function(RegraphHook):
 	;process Y
 	and	$07
 	ld	e,a
-	call	ExecuteDiffequAlgorithm
+	call	DEQ@ExecuteDiffequAlgorithm
 	AppOffErr
 	jr	@ReturnNZ
 @X:					;just return T (already in OP1)
 	set	numOP1,(iy+ParsFlag2)
-	call	RclT
+	call	DEQ@RclT
 	AppOffErr
 @ReturnNZ:
 	or	$FF
@@ -243,7 +243,7 @@ function(RegraphHook):
 	or	$FF
 	ret
 
-function(SetGraphMode):
+function(DEQ@SetGraphMode):
 	ld	a,(iy+grfModeFlags)
 	and	$0F			;reset all graph modes
 	or	b			;set graph mode to parametric
@@ -256,33 +256,33 @@ RemoveGotoErrorHandler:
 	and	$7F
 	jp	DisplayError
 
-function(AppChangeHook):
+function(DEQ@AppChangeHook):
 	.db	$83
-	call	SetCalcSpeed
+	call	DEQ@SetCalcSpeed
 	push	af
 	push	hl
 	ld	a,b
 	cp	kYequ
 	call	z,@ExitYEqu
 	ld	b,1<<grfParamM
-	call	SetGraphMode
+	call	DEQ@SetGraphMode
 	pop	hl
 	pop	af
 	ld	b,1<<grfFuncM
 	cp	cxTableEditor
-	jr	z,SetGraphMode	;let SetGraphMode return
+	jr	z,DEQ@SetGraphMode	;let SetGraphMode return
 	cp	kFormat
-	jp	z,ModeHook
+	jp	z,DEQ@ModeHook
 	ret
 
-function(AppChangeHook@ExitYEqu):
+function(DEQ@AppChangeHook@ExitYEqu):
 	AppOnErr(RemoveGotoErrorHandler)
 
 	;figure out which equations need to be evaluated in RK mode
 	ld	de,0
 @Loop2:
 	push	de
-	call	LoadEquation
+	call	DEQ@LoadEquation
 	rst	10h ;rFINDSYM
 	bit	5,(hl)
 	ex	de,hl
@@ -294,7 +294,7 @@ function(AppChangeHook@ExitYEqu):
 	jr	nz,@Loop2
 	;store which equations need to be evaluated in RK mode
 	push	de
-	call	LookupAppVar
+	call	DEQ@LookupAppVar
 	push	de
 	pop	bc
 	ld	hl,RKEvalOffset
@@ -305,17 +305,17 @@ function(AppChangeHook@ExitYEqu):
 
 	;Erase cache if smart graph can't be used
 	bit	smartGraph_inv,(iy+smartFlags)
-	call	nz,ClearCache
+	call	nz,DEQ@ClearCache
 
-	call	LoadSimpleCacheAddress
+	call	DEQ@LoadSimpleCacheAddress
 	res	cacheSimpleValidBit,(hl)
 	;fill simple cache with T
-	call	LoadSimpleCacheAddress
+	call	DEQ@LoadSimpleCacheAddress
 	set	cacheSimpleValidBit,(hl)
 	inc	hl
 	push	hl
 	bcall	_OP1Set0
-	call	StoT
+	call	DEQ@StoT
 	pop	de
 	ld	b,7
 @ZDSb9:
@@ -324,7 +324,7 @@ function(AppChangeHook@ExitYEqu):
 	call	Mov9
 	pop	bc
 	djnz	@ZDSb9
-	call	LoadStatusAddress
+	call	DEQ@LoadStatusAddress
 	set	RealEquBit,(hl)
 
 	pop	de
@@ -332,14 +332,14 @@ function(AppChangeHook@ExitYEqu):
 @Loop:
 	push	de
 	;Dis/Enable Y* function
-	call	LoadEquation
+	call	DEQ@LoadEquation
 	rst	10h ;rFINDSYM
 	ld	a,(hl)
 	and	1<<5			;the bit that dis/enables an equation
 	pop	de
 	push	de
 	push	af
-	call	LoadYEquation
+	call	DEQ@LoadYEquation
 	rst	10h ;rFINDSYM
 	ld	a,(hl)
 	res	5,a
@@ -349,7 +349,7 @@ function(AppChangeHook@ExitYEqu):
 	pop	de
 	push	de
 	;Check that equations returns a real value
-	call	LoadEquation
+	call	DEQ@LoadEquation
 	AppOnErr(@SkipEqu)
 	bcall	_ParseInp
 	AppOffErr
@@ -364,7 +364,7 @@ function(AppChangeHook@ExitYEqu):
 	push	de
 	;Update initial value
 	ld	a,1
-	call	LoadEquation@2
+	call	DEQ@LoadEquation@2
 	AppOnErr(@SkipInitial)
 	bcall	_ParseInp
 	AppOffErr
@@ -379,7 +379,7 @@ function(AppChangeHook@ExitYEqu):
 	pop	de
 	push	de
 	ld	a,1
-	call	LoadEquation@2
+	call	DEQ@LoadEquation@2
 	rst	10h ;rFINDSYM
 	bcall	_SetEmptyEditPtr
 	bcall	_OP6ToOP1
@@ -406,7 +406,7 @@ function(AppChangeHook@ExitYEqu):
 
 	bit	0,d
 	jr	z,@ZDSf8
-	call	LoadStatusAddress
+	call	DEQ@LoadStatusAddress
 	res	RealEquBit,(hl)
 @ZDSf8:
 	pop	af
@@ -451,7 +451,7 @@ function(AppChangeHook@ExitYEqu):
 	push	hl
 	ld	e,a			;D hasn't changed
 	push	de
-	call	LoadEquation
+	call	DEQ@LoadEquation
 	rst	10h ;rFINDSYM
 	ex	de,hl
 	pop	de
@@ -474,9 +474,9 @@ function(AppChangeHook@ExitYEqu):
 CurTableRow = $91DC
 CurTableCol = $91DD
 
-function(KeyHook):
+function(DEQ@KeyHook):
 	.db	$83
-	call	SetCalcSpeed
+	call	DEQ@SetCalcSpeed
 	push	af
 	ld	a,(cxCurApp)
 	cp	cxTableEditor
@@ -500,9 +500,9 @@ function(KeyHook):
 	xor	a
 	ret
 
-function(GraphHook):
+function(DEQ@GraphHook):
 	.db	$83
-	call	SetCalcSpeed
+	call	DEQ@SetCalcSpeed
 @Not2:
 	cp	$06
 	jr	nz,@Not6
@@ -510,7 +510,7 @@ function(GraphHook):
 	cp	kStd
 	jr	nz,@Allow
 	push	bc
-	call	LoadDiftolAddress
+	call	DEQ@LoadDiftolAddress
 	ex	de,hl
 	ld	hl,appvarInitDataDiftol
 	call	Mov9
@@ -521,9 +521,9 @@ function(GraphHook):
 	xor	a
 	ret
 
-function(YeditHook):
+function(DEQ@YeditHook):
 	.db	$83
-	call	SetCalcSpeed
+	call	DEQ@SetCalcSpeed
 	sub	$05
 	jr	nz,@Not5
 	ld	a,(EQS+7)
@@ -538,7 +538,7 @@ function(YeditHook):
 	jr	@ZDSb
 @ZDSf:
 	push	bc
-	call	LoadRKEvalAddress
+	call	DEQ@LoadRKEvalAddress
 	ld	a,(hl)
 	pop	bc
 	and	b
@@ -586,7 +586,7 @@ function(YeditHook):
 	ld	e,a
 	sra	e
 	and	1
-	call	LoadEquation@2
+	call	DEQ@LoadEquation@2
 	bcall	_ParseInp
 	bcall	_OP1ToOP6
 
@@ -632,9 +632,9 @@ function(YeditHook):
 	xor	a
 	ret
 
-function(MenuHook):		;PORTED (changed)
+function(DEQ@MenuHook):		;PORTED (changed)
 	.db	$83
-	call	SetCalcSpeed
+	call	DEQ@SetCalcSpeed
 	or	a
 	jr	nz,@Not0
 	ld	a,(MenuCurrent)
@@ -701,9 +701,9 @@ YEquMenu:
 	.db kExtendEcho2,kY5
 	.db kExtendEcho2,kY6
 
-function(WindowHook):	;PORTED (changed to support different menus, 3d functionality should be possible using this function)
+function(DEQ@WindowHook):	;PORTED (changed to support different menus, 3d functionality should be possible using this function)
 	.db	$83
-	call	SetCalcSpeed
+	call	DEQ@SetCalcSpeed
 	push	af
 	ld	a,(cxCurApp)
 	cp	kWindow
@@ -800,7 +800,7 @@ function(WindowHook):	;PORTED (changed to support different menus, 3d functional
 	bcall	_PopReal
 @EraseCache:
 	rst	18h ;rPUSHREALO1
-	call	ClearCache
+	call	DEQ@ClearCache
 	bcall	_PopRealO1
 @6Token:
 	ld	hl,OP1
@@ -809,7 +809,7 @@ function(WindowHook):	;PORTED (changed to support different menus, 3d functional
 @Not6:
 	dec	a
 	jr	nz,@Not7
-	call	LoadStatusAddress
+	call	DEQ@LoadStatusAddress
 	ld	a,(hl)
 	ld	hl,@TablePointers
 	bit	EulerBit,a
@@ -866,7 +866,7 @@ function(WindowHook):	;PORTED (changed to support different menus, 3d functional
 
 @LoadValueAddress:
 	push	af
-	call	LookupAppVar
+	call	DEQ@LookupAppVar
 	ld	hl,FldresOffset+2
 	add	hl,de
 	pop	de
@@ -996,11 +996,11 @@ modeTemp		= appBackUpScreen + 600
 saveStuff		= appBackUpScreen + 750
 _Flags		= appBackUpScreen +  30
 
-function(ModeHook):
+function(DEQ@ModeHook):
 	ld	hl,$97A2		; current selection
 	ld	(hl),0
 
-	call	LoadStatusAddress	;Destroys OP1
+	call	DEQ@LoadStatusAddress	;Destroys OP1
 	ld	a,(hl)
 	ld	(_Flags),a
 
@@ -1191,7 +1191,7 @@ function(ModeHook):
 	ld	a,cxFormat
 	ld	(cxCurApp),a
 
-	call	LoadStatusAddress	;Destroys OP1
+	call	DEQ@LoadStatusAddress	;Destroys OP1
 	ld	a,(_Flags)
 	ld	(hl),a
 
@@ -1389,7 +1389,7 @@ function(ModeHook):
 	push	hl
 	push	de
 	push	af
-	call	ClearCache
+	call	DEQ@ClearCache
 	pop	af
 	pop	de
 	pop	hl
@@ -1433,7 +1433,7 @@ function(ModeHook):
 
 CursorHook:
 	.db	$83
-	call	SetCalcSpeed
+	call	DEQ@SetCalcSpeed
 	push	af
 	call	@Lookup
 	ld	e,(hl)
@@ -1506,8 +1506,8 @@ CursorHook:
 
 ;;;;;;;;;;;;;;;;
 
-function(ClearCache):
-	call	LookupAppVar
+function(DEQ@ClearCache):
+	call	DEQ@LookupAppVar
 	ex	de,hl
 	inc	hl
 	inc	hl
@@ -1515,7 +1515,7 @@ function(ClearCache):
 	bcall	_MemClear
 	ret
 
-function(CreateAppvar):		;PORTED (changed here and in 3d, take a look at this when merging)
+function(DEQ@CreateAppvar):		;PORTED (changed here and in 3d, take a look at this when merging)
 	ld	hl,AppvarName
 	rst	20h ;rMOV9TOOP1
 	bcall	_ChkFindSym
@@ -1547,7 +1547,7 @@ function(CreateAppvar):		;PORTED (changed here and in 3d, take a look at this wh
 @NotArchived:
 	ret
 
-function(CreateEquations):
+function(DEQ@CreateEquations):
 	ld	e,0
 @Loop:
 	push	de
@@ -1582,7 +1582,7 @@ function(CreateEquations):
 	push	bc
 	push	hl
 
-	call	LookupAppVar
+	call	DEQ@LookupAppVar
 	push	de
 	ld	hl,equation
 	rst	20h ;rMOV9TOOP1
@@ -1605,7 +1605,7 @@ function(CreateEquations):
 	inc	de
 
 	push	de
-	call	LookupAppVar	;stack=[equ_data,appvar_offset,current_equation,...]
+	call	DEQ@LookupAppVar	;stack=[equ_data,appvar_offset,current_equation,...]
 	ex	de,hl
 	pop	de
 
@@ -1639,7 +1639,7 @@ function(CreateEquations):
 	ld	a,tY6T+1
 	cp	c
 	jr	nz,@Loop2
-	call	LookupAppVar
+	call	DEQ@LookupAppVar
 	ex	de,hl
 	ld	de,AppvarInitSize
 	ld	(hl),e
@@ -1651,11 +1651,11 @@ YEquation:
 YEquationEnd:
 YEquationSize = YEquationEnd - YEquation + 1
 
-function(SetupCalc):
+function(DEQ@SetupCalc):
 	ld	a,$42
 	ld	(YEquHookState),a
-	call	CreateAppvar
-	call	LoadStatusAddress
+	call	DEQ@CreateAppvar
+	call	DEQ@LoadStatusAddress
 	;Save bits
 	set	SimultBit,(hl)
 	bit	grfSimul,(iy+grfDBFlags)
@@ -1668,40 +1668,40 @@ function(SetupCalc):
 	res	ExprBit,(hl)
 @ZDSf2:
 	;save Graphing styles
-	call	LoadStyleAddress
+	call	DEQ@LoadStyleAddress
 	ex	de,hl
 	ld	hl,GX1
 	ld	bc,6
 	ldir
-	call	SaveEquations
+	call	DEQ@SaveEquations
 	AppOnErr(@Error)
-	call	CreateEquations
+	call	DEQ@CreateEquations
 	AppOffErr
-	call	EnableEquations
+	call	DEQ@EnableEquations
 	bcall	_SetTblGraphDraw	;dirty graph and table
 	ret
 
 @Error:	;Memory is full, error during CreateEqu
 	push	af
-	call	RestoreCalc@NoSave
+	call	DEQ@RestoreCalc@NoSave
 	pop	af
 	res	7,a
 	jp	DisplayError
 
 
-function(RestoreCalc):
-	call	SaveParamEquations
-	call	SaveEnabledEquations
+function(DEQ@RestoreCalc):
+	call	DEQ@SaveParamEquations
+	call	DEQ@SaveEnabledEquations
 @NoSave:
 	xor	a
 	ld	(iy+$35),a
 	ld	(iy+$36),a		;disable hooks
 	ld	(YEquHookState),a	;not in diffequ mode anymore
-	call	DeleteEquations
-	call	RestoreEquations
+	call	DEQ@DeleteEquations
+	call	DEQ@RestoreEquations
 	ld	b,1<<grfFuncM
-	call	SetGraphMode
-	call	LoadStatusAddress
+	call	DEQ@SetGraphMode
+	call	DEQ@LoadStatusAddress
 	bit	SimultBit,(hl)	;Simultaneous mode is enabled
 	jr	nz,@ZDSf1
 	res	grfSimul,(iy+grfDBFlags)
@@ -1711,13 +1711,13 @@ function(RestoreCalc):
 	res	0,(iy+24)
 @ZDSf2:
 	;restore Graphing style 9780..9786 GX1..GX1+5
-	call	LoadStyleAddress
+	call	DEQ@LoadStyleAddress
 	ld	de,GX1
 	ld	bc,6
 	ldir
 	ret
 
-function(SaveEnabledEquations):
+function(DEQ@SaveEnabledEquations):
 	ld	hl,equation
 	rst	20h ;rMOV9TOOP1
 	ld	b,0
@@ -1739,15 +1739,15 @@ function(SaveEnabledEquations):
 	cp	c
 	jr	nz,@Loop
 	push	bc
-	call	LookupAppVar
+	call	DEQ@LookupAppVar
 	ld	hl,EnabledOffset
 	add	hl,de
 	pop	bc
 	ld	(hl),b
 	ret
 
-function(EnableEquations):
-	call	LookupAppVar
+function(DEQ@EnableEquations):
+	call	DEQ@LookupAppVar
 	ld	hl,EnabledOffset
 	add	hl,de
 	ld	b,(hl)
@@ -1777,8 +1777,8 @@ function(EnableEquations):
 	jr	nz,@Loop
 	ret
 
-function(SaveParamEquations):
-	call	LoadEquAddress
+function(DEQ@SaveParamEquations):
+	call	DEQ@LoadEquAddress
 	push	hl
 	ld	hl,equation
 	rst	20h ;rMOV9TOOP1
@@ -1823,7 +1823,7 @@ function(SaveParamEquations):
 	pop	bc
 	ret
 
-function(DeleteEquations):
+function(DEQ@DeleteEquations):
 	ld	hl,equation
 	rst	20h ;rMOV9TOOP1
 	ld	a,tY1
@@ -1852,13 +1852,13 @@ function(DeleteEquations):
 	jr	nz,@Loop2
 	ret
 
-function(SaveEquations):
+function(DEQ@SaveEquations):
 	ld	c,tY1
 @Loop1:
 	ld	a,c
 	add	a,10	;Y1->Y0+1
 	ld	b,a
-	call	RenameEquation
+	call	DEQ@RenameEquation
 	inc	c
 	ld	a,tY6+1
 	cp	c
@@ -1868,20 +1868,20 @@ function(SaveEquations):
 	ld	a,c
 	add	a,twn-tX1T+1	;X1T->w(n)+1
 	ld	b,a
-	call	RenameEquation
+	call	DEQ@RenameEquation
 	inc	c
 	ld	a,tY6T+1
 	cp	c
 	jr	nz,@Loop2
 	ret
 
-function(RestoreEquations):
+function(DEQ@RestoreEquations):
 	ld	c,tY1+10
 @Loop1:
 	ld	a,c
 	sub	10			;Y1<-Y0+1
 	ld	b,a
-	call	RenameEquation
+	call	DEQ@RenameEquation
 	inc	c
 	ld	a,tY6+10+1
 	cp	c
@@ -1891,14 +1891,14 @@ function(RestoreEquations):
 	ld	a,c
 	sub	twn-tX1T+1		;X1T<-w(n)+1
 	ld	b,a
-	call	RenameEquation
+	call	DEQ@RenameEquation
 	inc	c
 	ld	a,tY6T-tX1T+twn+2
 	cp	c
 	jr	nz,@Loop2
 	ret
 
-function(RenameEquation):	;C=original name B=new name
+function(DEQ@RenameEquation):	;C=original name B=new name
 	push	bc
 	ld	a,c
 	ld	hl,equation
@@ -1911,7 +1911,7 @@ function(RenameEquation):	;C=original name B=new name
 	ld	(hl),b
 	ret
 
-function(SetCalcSpeed):
+function(DEQ@SetCalcSpeed):
  	push	af
  	push	bc
  	bcall	_GetBaseVer
@@ -1930,7 +1930,7 @@ function(SetCalcSpeed):
  	pop	af
  	ret
 
-function(LookupAppVar):		;PORTED (called lookupgraph in 3d mode)
+function(DEQ@LookupAppVar):		;PORTED (called lookupgraph in 3d mode)
 	ld	hl,AppvarName
 	rst	20h
 	bcall	_ChkFindSym
@@ -1940,22 +1940,22 @@ function(LookupAppVar):		;PORTED (called lookupgraph in 3d mode)
 AppvarName:
 	.db	AppVarObj,"Diffequ",0
 
-function(SameSign):		;Z if same sign of OP1 and OP2
+function(DEQ@SameSign):		;Z if same sign of OP1 and OP2
 	ld	a,(OP1)
 	ld	hl,OP2
 	xor	(hl)
 	and	$80
 	ret
 
-function(LoadYi0):
+function(DEQ@LoadYi0):
 	ld	a,1
-	call	LoadEquation@2
+	call	DEQ@LoadEquation@2
 	bcall	_ParseInp
 	bcall	_CkOP1Real
 	ret	z
-	jp	ParserHook@ArgumentError
+	jp	DEQ@ParserHook@ArgumentError
 
-function(LoadEquation):
+function(DEQ@LoadEquation):
 	xor	a
 @2:
 	add	a,e
@@ -1969,7 +1969,7 @@ function(LoadEquation):
 equation:
 	.db EquObj, tVarEqu, tX1T,0
 
-function(CountEquations):	;returns the number of active equations in d
+function(DEQ@CountEquations):	;returns the number of active equations in d
 	xor	a
 	ld	b,6
 @Loop:
@@ -1978,14 +1978,14 @@ function(CountEquations):	;returns the number of active equations in d
 	djnz	@Loop
 	ret
 
-function(LoadOP2):		;hl=M*256+E
+function(DEQ@LoadOP2):		;hl=M*256+E
 	push	hl
 	bcall	_ZeroOP2
 	pop	hl
 	ld	(OP2+1),hl
 	ret
 
-function(LoadYEquation):
+function(DEQ@LoadYEquation):
 	ld	a,tY1
 	add	a,e
 	ld	hl,equation
@@ -1993,56 +1993,56 @@ function(LoadYEquation):
 	ld	(OP1+2),a
 	ret
 
-function(LoadFldres):
-	call	LookupAppVar
+function(DEQ@LoadFldres):
+	call	DEQ@LookupAppVar
 	ld	hl,FldresOffset
 	add	hl,de
 	rst	20h ;rMOV9TOOP1
 	ret
 
-function(LoadSimpleCacheAddress):
-	call	LookupAppVar
+function(DEQ@LoadSimpleCacheAddress):
+	call	DEQ@LookupAppVar
 	ex	de,hl
 	inc	hl
 	inc	hl
 	ret
 
-function(LoadEquAddress):
-	call	LookupAppVar
+function(DEQ@LoadEquAddress):
+	call	DEQ@LookupAppVar
 	ld	hl,EquOffset
 	add	hl,de
 	ret
 
-function(LoadRKEvalAddress):
-	call	LookupAppVar
+function(DEQ@LoadRKEvalAddress):
+	call	DEQ@LookupAppVar
 	ld	hl,RKEvalOffset
 	add	hl,de
 	ret
 
-function(LoadStyleAddress):
-	call	LookupAppVar
+function(DEQ@LoadStyleAddress):
+	call	DEQ@LookupAppVar
 	ld	hl,StyleOffset
 	add	hl,de
 	ret
 
-function(LoadStatusAddress):
-	call	LookupAppVar
+function(DEQ@LoadStatusAddress):
+	call	DEQ@LookupAppVar
 	ld	hl,StatusOffset
 	add	hl,de
 	ret
 
-function(LoadDiftolAddress):
-	call	LookupAppVar
+function(DEQ@LoadDiftolAddress):
+	call	DEQ@LookupAppVar
 	ld	hl,DiftolOffset
 	add	hl,de
 	ret
 
-function(LoadDiftol):
-	call	LoadDiftolAddress
+function(DEQ@LoadDiftol):
+	call	DEQ@LoadDiftolAddress
 	rst	20h ;rMOV9TOOP1
 	ret
 
-function(RclT):
+function(DEQ@RclT):
 	ld	a,(cxCurApp)
 	cp	cxTableEditor
 	jr	nz,@T
@@ -2052,7 +2052,7 @@ function(RclT):
 	bcall	_RclVarSym
 	ret
 
-function(StoT):
+function(DEQ@StoT):
 	ld a,(cxCurApp)
 	cp cxTableEditor
 	jr nz,@T
@@ -2066,6 +2066,7 @@ Xstep	= TSTEPt
 #include "euler.asm"
 #include "runge-kutta.asm"
 #include "slopefield.asm"
+#include "helper.asm"
 
 cacheSwitchBit		= 0
 cache1ValidBit		= 1

@@ -55,7 +55,7 @@ _XYTable    = $8800 ; on _saveSScreen; must be aligned
 ; set 2,(iy+3) : graph cursor
 ; 8E63 is weird: should be 0
 
-function(GraphHook):
+function(ThreeD@GraphHook):
 	push	af
 	push	bc
 	bcall	_getBaseVer
@@ -73,7 +73,7 @@ function(GraphHook):
 	pop	bc
 	pop	af
 
-	call	CheckGraphMode
+	call	ThreeD@CheckGraphMode
 	jp	z,@Allow
 
 	or	a
@@ -141,11 +141,11 @@ function(GraphHook):
 	jr	z,@Allow
 	cp	kTrace
 	jr	z,@Allow
-	jp	Graph@cxMain
+	jp	ThreeD@Graph@cxMain
 @Not6:
 
 	cp	7
-	jp	z,DoGraph
+	jp	z,ThreeD@DoGraph
 @Allow:
 	xor	a
 	ret
@@ -189,9 +189,9 @@ function(GraphHook):
 @NotAnythingCursory:
 	cp	kStd
 	jr	nz,@NotStd
-	ld	hl,Strings@StandardView
+	ld	hl,ThreeD@Strings@StandardView
 	ld	de,_RotXX
-	ld	bc,Strings@ZStandardEnd - Strings@StandardView
+	ld	bc,ThreeD@Strings@ZStandardEnd - ThreeD@Strings@StandardView
 	ldir
 	set	graphDraw,(iy + graphFlags)
 	ret
@@ -202,7 +202,7 @@ function(GraphHook):
 @NotYes:
 	ret
 
-function(DoGraph):
+function(ThreeD@DoGraph):
 	bit	vertSplit,(iy + sGrFlags)
 	jr	z,@NotVertSplit
 	bcall	_ForceFullScreen
@@ -215,7 +215,7 @@ function(DoGraph):
 	ld    de,_XYZTable
 	ld    bc,RES*RES*3
 	ldir
-	ld	hl,Strings@ViewPlatypus
+	ld	hl,ThreeD@Strings@ViewPlatypus
       ld	de,_RotXX
       ld	bc,18
       ldir
@@ -227,7 +227,7 @@ function(DoGraph):
 	jp    @ItsEaster
 @NotYes:
 
-	call  LookupEntry
+	call  ThreeD@LookupEntry
 	ld    a,(de)
 	inc   de
 	cp    4
@@ -255,7 +255,7 @@ function(DoGraph):
 	ld    de,_XYZTable
 	ld    bc,RES*RES*3
 	ldir
-	ld	hl,Strings@ViewEaster
+	ld	hl,ThreeD@Strings@ViewEaster
       ld	de,_RotXX
       ld	bc,18
       ldir
@@ -274,7 +274,7 @@ function(DoGraph):
 	add	a,a
 	jp	nc,@FillIn
 
-	ld	hl,Strings@StandardView
+	ld	hl,ThreeD@Strings@StandardView
 	ld	de,_RotXX
 	ld	bc,18
 	ldir
@@ -288,7 +288,7 @@ function(DoGraph):
 	ld    (curRow),hl
 	set   textInverse,  (iy + textFlags)
 	res	appTextSave,  (iy + appFlags)
-	ld    hl,Strings@Calculating
+	ld    hl,ThreeD@Strings@Calculating
 	ld    de,OP1
 	push  de
 	ld    bc,16
@@ -349,9 +349,9 @@ function(DoGraph):
 	ld    a,RES
 	ld    (_counterX),a
 @XLoop:
-	ld    hl,Strings@EntryName
+	ld    hl,ThreeD@Strings@EntryName
 	rst   20h
-	AppOnErr(GraphErrorHandler)
+	AppOnErr(ThreeD@GraphErrorHandler)
 	bcall _ParseInp
 	AppOffErr
 	bcall	_CkOP1Real
@@ -363,7 +363,7 @@ function(DoGraph):
 	ld    hl,_rangeZ
 	call  Mov9ToOP2
 	bcall _FPMult
-	call	ConvertOP1
+	call	ThreeD@ConvertOP1
 @OutRange:
 	push  af
 	bcall _RclX
@@ -453,7 +453,7 @@ function(DoGraph):
 	ld    a,80
 	bcall _SetXXOP2
 	bcall _FPMult
-	call	ConvertOP1
+	call	ThreeD@ConvertOP1
 	ld	(XAxis),a
 
 	ld	hl,_yMin
@@ -467,7 +467,7 @@ function(DoGraph):
 	ld    a,80
 	bcall _SetXXOP2
 	bcall _FPMult
-	call	ConvertOP1
+	call	ThreeD@ConvertOP1
 	ld	(YAxis),a
 
 	ld	hl,_zMin
@@ -481,10 +481,10 @@ function(DoGraph):
 	ld    a,80
 	bcall _SetXXOP2
 	bcall _FPMult
-	call	ConvertOP1
+	call	ThreeD@ConvertOP1
 	ld	(ZAxis),a
 
-	call	DrawGraph
+	call	ThreeD@DrawGraph
 	or	$FF
 	ret
 
@@ -500,18 +500,18 @@ function(DoGraph):
 	ld    a,E_GraphRange & $7F
 	bjump _JError
 
-function(GraphErrorHandler):
+function(ThreeD@GraphErrorHandler):
 	cp    E_Break
 	jr    z,@DoError
 	cp    E_NonReal
 	ld	a,$80
-	jp    c,DoGraph@OutRange
+	jp    c,ThreeD@DoGraph@OutRange
 	jr    nz,@DoError
 	ld    a,(OP1)
 	and   $1F
 	cp    CplxObj
 	ld	a,$80
-	jp    nz,DoGraph@OutRange
+	jp    nz,ThreeD@DoGraph@OutRange
 @DoError:
 	ld	a,tun
 	ld	($9654),a	; seems to contain name of variable causing an error
@@ -519,7 +519,7 @@ function(GraphErrorHandler):
 	;and   $7F
 	bjump _JError
 
-function(ConvertOP1):
+function(ThreeD@ConvertOP1):
 	ld    hl,OP1
 	ld    a,(hl)
 	add   a,a
@@ -556,9 +556,9 @@ function(ConvertOP1):
 
 ; Thanks to Matt Shepcar for this line routine!
 
-LineBegin:
+ThreeD@LineBegin:
 .org saveSScreen
-function(Line):
+function(ThreeD@Line):
 	ld	a,h
 	cp	d
 	jr	nc,@Ordered
@@ -660,6 +660,6 @@ function(Line):
 	or	c
 	ld	(hl),a
 	ret
-LineSize = $ - Line
+LineSize = $ - ThreeD@Line
 
 .end

@@ -1,17 +1,17 @@
-function(SlopeField):
-	call	LoadStatusAddress
+function(DEQ@SlopeField):
+	call	DEQ@LoadStatusAddress
 	bit	SlopeFldBit,(hl)
 	ret	z
 	bit	RealEquBit,(hl)
 	ret	z
 	inc	hl
 	ld	d,(hl)
-	call	CountEquations
+	call	DEQ@CountEquations
 	or	a
 	ret	z			;no equations selected
 	dec	a
 	jp	nz,@Invalid		;more than one equation used during graphing
-	call	LoadFldres
+	call	DEQ@LoadFldres
 	bcall	_OP1ToOP6
 	bcall	_ConvOP1
 	or	d
@@ -20,7 +20,7 @@ function(SlopeField):
 
 	push	de
 	AppOnErr(@XUndefinedError)
-	call	RclT
+	call	DEQ@RclT
 	AppOffErr
 @ContinueRclT:
 	rst	18h ;rPUSHREALO1
@@ -47,7 +47,7 @@ function(SlopeField):
 
 	bcall	_OP2ToOP1
 	ld	hl,$757F		;.75 screen proportion is 3:4
-	call	LoadOP2
+	call	DEQ@LoadOP2
 	bcall	_FPMult
 	bcall	_Int
 	;int(Fieldres_X*.75)
@@ -80,7 +80,7 @@ function(SlopeField):
 	ld	a,XMINt
 	bcall	_RclSysTok
 	rst	30h ;rFPADD
-	call	StoT 			;X = Xmin+X_StepSize/2
+	call	DEQ@StoT 			;X = Xmin+X_StepSize/2
 
 	pop	de
 @XLoop:
@@ -95,7 +95,7 @@ function(SlopeField):
 	call	@StoreY
 	;FPS=[Y,Y_StepSize,X_StepSize,X,...]
 
-	call	LoadRKEvalAddress
+	call	DEQ@LoadRKEvalAddress
 	ld	b,(hl)
 	xor	a
 @EquNrLoop:
@@ -109,7 +109,7 @@ function(SlopeField):
 	ld	e,a
 @YLoop:
 	push	de
-	call	LoadEquation
+	call	DEQ@LoadEquation
 	AppOnErr(@ParserErrorHandler)
 	bcall	_ParseInp
 	AppOffErr
@@ -136,14 +136,14 @@ function(SlopeField):
 @ZDSf2:
 	bcall	_PopRealO1
 	ld	hl,$257F		;.25
-	call	LoadOP2
+	call	DEQ@LoadOP2
 	bcall	_FPMult
 	bcall	_OP1ToOP6		;OP6=PlotLength = PlotLength/4
 	bcall	_CpyTo2FPST
 	bcall	_FPMult
 	bcall	_OP1ToOP5		;OP5=PlotLength*Derivative
 
-	call	RclT
+	call	DEQ@RclT
 	bcall	_OP1ToOP4		;OP4=X
 	bcall	_OP6ToOP2		;PlotLength
 	bcall	_FPSub
@@ -185,10 +185,10 @@ function(SlopeField):
 	ld	de,9
 	bcall	_DeallocFPS1
 
-	call	RclT
+	call	DEQ@RclT
 	bcall	_CpyTo2FPS1
 	rst	30h ;rFPADD
-	call	StoT			;X += X_StepSize
+	call	DEQ@StoT			;X += X_StepSize
 	pop	de
 	dec	e
 	jp	nz,@XLoop
@@ -197,10 +197,10 @@ function(SlopeField):
 	bcall	_DeallocFPS1
 	AppOffErr
 @Continue:
-	call	LoadSimpleCacheAddress
+	call	DEQ@LoadSimpleCacheAddress
 	res	cacheSimpleValidBit,(hl)
 	bcall	_PopRealO1
-	call	StoT
+	call	DEQ@StoT
 	ret
 
 @Invalid:
@@ -212,11 +212,11 @@ function(SlopeField):
 
 @StoreY:
 	rst	18h ;rPUSHREALO1
-	call	RclT
+	call	DEQ@RclT
 	bcall	_OP1ToOP6
-	call	LoadRKEvalAddress
+	call	DEQ@LoadRKEvalAddress
 	ld	d,(hl)
-	call	Runge@SaveYCaches
+	call	DEQ@Runge@SaveYCaches
 	ret
 
 @ErrorHandler:
@@ -226,7 +226,7 @@ function(SlopeField):
 	jr	c,@Continue
 @JumpError:
 	push	bc
-	call	LoadSimpleCacheAddress
+	call	DEQ@LoadSimpleCacheAddress
 	res	cacheSimpleValidBit,(hl)
 	ld	de,StatusOffset-2
 	add	hl,de

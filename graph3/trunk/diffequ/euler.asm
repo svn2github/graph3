@@ -6,7 +6,7 @@
 ;y*		<-> X*T
 ;yi*		<-> Y*T
 
-function(Euler):
+function(DEQ@Euler):
 	push	de
 	rst	08h ;rOP1TOOP2
 	ld	a,X0
@@ -57,7 +57,7 @@ function(Euler):
 	add	hl,de
 	rst	20h ;rMOV9TOOP1
 	push	hl
-	call	StoT
+	call	DEQ@StoT
 	bcall	_PopRealO2
 	bcall	_PopRealO1
 	pop	hl
@@ -68,10 +68,10 @@ function(Euler):
 	;set (variable) X and FPST
 	ld	a,X0
 	bcall	_RclSysTok
-	call	StoT
+	call	DEQ@StoT
 	pop	de
 	push	de
-	call	LoadYi0
+	call	DEQ@LoadYi0
 	bcall	_PopRealO2
 	bcall	_PopRealO2
 	rst	18h ;rPUSHREALO1
@@ -104,10 +104,10 @@ function(Euler):
 	;FPS=FPS(+-)Y*(X)*Xstep (forward or reverse euler)
 	pop	de
 	push	de
-	call	LoadEquation
+	call	DEQ@LoadEquation
 	bcall	_ParseInp
 	bcall	_CkOP1Real
-	jp	nz,ParserHook@ArgumentError
+	jp	nz,DEQ@ParserHook@ArgumentError
 	rst	08h ;rOP1TOOP2
 	ld	a,Xstep
 	bcall	_RclSysTok
@@ -128,7 +128,7 @@ function(Euler):
 	ld	a,Xstep
 	bcall	_RclSysTok
 	rst	08h ;rOP1TOOP2
-	call	RclT
+	call	DEQ@RclT
 	pop	af
 	push	af
 	or	a
@@ -138,7 +138,7 @@ function(Euler):
 @LoopAdd2:
 	rst	30h ;rFPADD
 @LoopSub2:
-	call	StoT
+	call	DEQ@StoT
 
 	;save calculated value in cache
 	pop	de
@@ -159,7 +159,7 @@ function(Euler):
 	inc	hl
 @LoopCache2:
 	push	hl
-	call	RclT
+	call	DEQ@RclT
 	bcall	_CpyTo2FPST
 	pop	de
 	ld	hl,OP1
@@ -182,7 +182,7 @@ function(Euler):
 @LoopSkip:
 	push	de
 	;check if final iteration is needed
-	call	RclT
+	call	DEQ@RclT
 	rst	08h ;rOP1TOOP2
 	bcall	_CpyTo1FPS1
 	bcall	_FPSub
@@ -193,10 +193,10 @@ function(Euler):
 	rst	18h ;rPUSHREALO1
 	pop	de
 	push	de
-	call	LoadEquation
+	call	DEQ@LoadEquation
 	bcall	_ParseInp
 	bcall	_CkOP1Real
-	jp	nz,ParserHook@ArgumentError
+	jp	nz,DEQ@ParserHook@ArgumentError
 	bcall	_PopRealO2
 	bcall	_FPMult
 	bcall	_PopRealO2
@@ -208,11 +208,11 @@ function(Euler):
 	pop	de
 	ret
 
-function(Euler@CheckCache):	;checks whether using the cache is usefull
+function(DEQ@Euler@CheckCache):	;checks whether using the cache is usefull
 	;E contains equ number
 	;D contains nr of bytes to skip 1=first cache , 19=2nd cache
 	push	de
-	call	Euler@LookupCache
+	call	DEQ@Euler@LookupCache
 	pop	de
 	ld	a,d
 	dec	a
@@ -238,11 +238,11 @@ function(Euler@CheckCache):	;checks whether using the cache is usefull
 	or	a
 	ret	z			;result is in cache
 	bcall	_CpyTo2FPS1
-	call	SameSign
+	call	DEQ@SameSign
 	ret	nz			;only going farther from X0 using cache
 	bcall	_FPSub
 	bcall	_CpyTo2FPST
-	call	SameSign
+	call	DEQ@SameSign
 	xor	80h
 	;NZ if X0 is closer
 	ret
@@ -265,10 +265,10 @@ eulerCacheSize equ eulerCacheBlockSize*6 ;Y1..Y6
 ;37		Cache Block for Y5
 ;37		Cache Block for Y6
 
-function(Euler@LookupCache):
+function(DEQ@Euler@LookupCache):
 ;E contains equation number
 	push	de
-	call	LookupAppVar
+	call	DEQ@LookupAppVar
 	ex	de,hl
 	ld	de,2-(eulerCacheBlockSize)+simpleCacheSize	;leave simple cache available for slopefield use
 	add	hl,de

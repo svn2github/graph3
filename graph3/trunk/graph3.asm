@@ -48,13 +48,13 @@ _SetMenuHook	equ	5083h
 
 	jp	Init		; we do this so that if they update the app, the pointers are intact
 HookY	.db	$83
-	jp	YeditHook
+	jp	ThreeD@YeditHook
 HookW	.db	$83
-	jp	WindowHook
+	jp	ThreeD@WindowHook
 HookG	.db	$83
-	jp	GraphHook
+	jp	ThreeD@GraphHook
 HookA	.db	$83
-	jp	AppChangeHook
+	jp	ThreeD@AppChangeHook
 
 function(Init):
 	ld	hl,saveSScreen
@@ -77,12 +77,12 @@ function(Init):
 	set	textInverse,(iy + textFlags)
 	xor	a
 	ld	(penRow),a
-	ld	hl,Strings@Title
-	call	VPutsCenter
+	ld	hl,ThreeD@Strings@Title
+	call	ThreeD@VPutsCenter
 	ld	a,$39
 	ld	(penRow),a
-	ld	hl,Strings@Email
-	call	VPutsCenter
+	ld	hl,ThreeD@Strings@Email
+	call	ThreeD@VPutsCenter
 	res	textInverse,(iy + textFlags)
 
 	bit	2,(iy+$35)
@@ -123,7 +123,7 @@ function(Init):
 	jr	@Uninstall
 @Ok4	; if we got here, no conflict exists and no uninstall; simply install it and show message.
 
-      ld    hl,Strings@GraphName
+      ld    hl,ThreeD@Strings@GraphName
       rst   20h
       bcall _ChkFindSym
       jr	c,@NonExistant
@@ -140,10 +140,10 @@ function(Init):
       ld    hl,HookA
       bcall _SetAppChangeHook
 
-	ld	hl,Strings@Installed1
-	ld	de,Strings@Installed2
+	ld	hl,ThreeD@Strings@Installed1
+	ld	de,ThreeD@Strings@Installed2
 @Common:
-	call	MessageBox
+	call	ThreeD@MessageBox
 	cp	kYequ
 	jr	z,@Yequ
 	bjump	_JForceCmdNoChar
@@ -160,8 +160,8 @@ function(Init):
 	inc	hl
 	res	2,(hl)
 
-	ld	hl,Strings@Removed1
-	ld	de,Strings@Removed2
+	ld	hl,ThreeD@Strings@Removed1
+	ld	de,ThreeD@Strings@Removed2
 	jr	@Common
 
 @Conflict:
@@ -205,7 +205,7 @@ function(Init):
 	dec	hl
 	ld	(hl),0
 @ConflictDone:
-	ld	hl,Strings@Uninstall
+	ld	hl,ThreeD@Strings@Uninstall
 	ld	de,OP5-8
 	push	de
 	ld	bc,8

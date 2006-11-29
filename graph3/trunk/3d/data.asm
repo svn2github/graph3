@@ -1,4 +1,4 @@
-function(Strings):
+function(ThreeD@Strings):
 @Title:
 	.db "Graph’  v1.1",6,6,"by  Kirk  Meyer",0
 @Email:

@@ -8,7 +8,7 @@
 ;#define MultByE add a,e\ jp po,$+9\ jp m,$+11\ jp $+6\ jp p,$+5\ neg\ ld h,MulTable>>8\ ld l,a\ ld a,d\ sub e\ jp po,$+9\ jp m,$+11\ jp $+6\ jp p,$+5\ neg\ ld d,(hl)\ inc h\ ld e,(hl)\ ld l,a\ ld a,e\ sub (hl)\ ld e,a\ dec h\ ld a,d\ sbc a,(hl)\ ld d,a
 #define MultByE add a,e\ ld h,MulTable>>8\ ld l,a\ ld a,d\ sub e\ ld d,(hl)\ inc h\ ld e,(hl)\ ld l,a\ ld a,e\ sub (hl)\ ld e,a\ dec h\ ld a,d\ sbc a,(hl)\ ld d,a
 
-function(Graph@cxMain):
+function(ThreeD@Graph@cxMain):
       cp    kColon
       jr    nz,@NotMode
       ld    hl,_Flags
@@ -19,7 +19,7 @@ function(Graph@cxMain):
 @NotMode:
       cp    kCapX
       jr    nz,@NotX
-      ld    hl,Strings@ViewXAxis
+      ld    hl,ThreeD@Strings@ViewXAxis
       ld    de,_RotXX
       ld    bc,18
       ldir
@@ -27,7 +27,7 @@ function(Graph@cxMain):
 @NotX:
       cp    kCapY
       jr    nz,@NotY
-      ld    hl,Strings@ViewYAxis
+      ld    hl,ThreeD@Strings@ViewYAxis
       ld    de,_RotXX
       ld    bc,18
       ldir
@@ -35,7 +35,7 @@ function(Graph@cxMain):
 @NotY:
       cp    kCapZ
       jr    nz,@NotZ
-      ld    hl,Strings@ViewZAxis
+      ld    hl,ThreeD@Strings@ViewZAxis
       ld    de,_RotXX
       ld    bc,18
       ldir
@@ -221,7 +221,7 @@ function(Graph@cxMain):
       ld    de,_xMin
       call  Mov9
       set   graphDraw,(iy + graphFlags)
-      call  DoGraph
+      call  ThreeD@DoGraph
       or    $FF
       ret
 
@@ -288,7 +288,7 @@ function(Graph@cxMain):
       ld    (_RotYZ),de
       ld    (_RotZZ),hl
 @Redraw:
-      call  DrawGraph
+      call  ThreeD@DrawGraph
       or    $FF
       ret
 @NotDown:
@@ -361,7 +361,7 @@ FindPixel:
 
 FP_Bits: .db $80,$40,$20,$10,$08,$04,$02,$01
 
-function(DrawPoly):
+function(ThreeD@DrawPoly):
       ld    (tempSP),sp
       ld    sp,_Poly1
       pop   de
@@ -513,7 +513,7 @@ function(DrawPoly):
       ld    hl,_ScanBuffer + 128
       ld    de,(_Poly1)
       ld    bc,(_Poly2)
-      call  ScanLine
+      call  ThreeD@ScanLine
 
       ex    af,af'
       dec   a
@@ -526,7 +526,7 @@ function(DrawPoly):
       push  de
       ld    de,(_Poly2)
       ld    bc,(_Poly3)
-      call  ScanLine
+      call  ThreeD@ScanLine
       pop   de
       ex    (sp),hl
       ld    b,(hl)
@@ -555,7 +555,7 @@ function(DrawPoly):
       push  de
       ld    de,(_Poly3)
       ld    bc,(_Poly4)
-      call  ScanLine
+      call  ThreeD@ScanLine
       pop   de
       ex    (sp),hl
       ld    b,(hl)
@@ -584,7 +584,7 @@ function(DrawPoly):
       ld    hl,_ScanBuffer
       ld    de,(_Poly1)
       ld    bc,(_Poly4)
-      call  ScanLine
+      call  ThreeD@ScanLine
 
       ex    af,af'
       dec   a
@@ -597,7 +597,7 @@ function(DrawPoly):
       push  de
       ld    de,(_Poly4)
       ld    bc,(_Poly3)
-      call  ScanLine
+      call  ThreeD@ScanLine
       pop   de
       ex    (sp),hl
       ld    b,(hl)
@@ -626,7 +626,7 @@ function(DrawPoly):
       push  de
       ld    de,(_Poly3)
       ld    bc,(_Poly2)
-      call  ScanLine
+      call  ThreeD@ScanLine
       pop   de
       ex    (sp),hl
       ld    b,(hl)
@@ -665,8 +665,8 @@ function(DrawPoly):
       ex    de,hl
       ld    bc,_ScanBuffer
       pop   af
-      jp    m,FillLine1I
-function(FillLine1):
+      jp    m,ThreeD@FillLine1I
+function(ThreeD@FillLine1):
       ld    a,(bc)
       inc   c
       exx
@@ -697,7 +697,7 @@ function(FillLine1):
       exx
       or    (hl)
       ld    (hl),a
-      jp    FillLine2
+      jp    ThreeD@FillLine2
 @NotDone:
       exx
       or    (hl)
@@ -722,7 +722,7 @@ function(FillLine1):
       exx
       or    (hl)
       ld    (hl),a
-function(FillLine2):
+function(ThreeD@FillLine2):
       set   7,c
       ld    a,(bc)
       inc   c
@@ -744,7 +744,7 @@ function(FillLine2):
       exx
       and   (hl)
       ld    (hl),a
-      jp    FillLine3
+      jp    ThreeD@FillLine3
 @NotDone:
       exx
       and   (hl)
@@ -768,7 +768,7 @@ function(FillLine2):
       exx
       and   (hl)
       ld    (hl),a
-      jp    FillLine3
+      jp    ThreeD@FillLine3
 @SkipItAll:
       ld    e,a
       exx
@@ -779,7 +779,7 @@ function(FillLine2):
       ld    h,0
       ld    l,a
       add   hl,de
-function(FillLine3):
+function(ThreeD@FillLine3):
       ld    a,(bc)
       res   7,c
       inc   c
@@ -799,7 +799,7 @@ function(FillLine3):
       exx
       or    (hl)
       ld    (hl),a
-      jp    FillLine4
+      jp    ThreeD@FillLine4
 @NotDone:
       exx
       or    (hl)
@@ -824,17 +824,17 @@ function(FillLine3):
       exx
       or    (hl)
       ld    (hl),a
-function(FillLine4):
+function(ThreeD@FillLine4):
       ld    hl,12
       add   hl,de
       ex    de,hl
       exx
       dec   l
       exx
-      jp    nz,FillLine1
+      jp    nz,ThreeD@FillLine1
       ret
 
-function(FillLine1I):
+function(ThreeD@FillLine1I):
       ld    a,(bc)
       inc   c
       exx
@@ -865,7 +865,7 @@ function(FillLine1I):
       exx
       and   (hl)
       ld    (hl),a
-      jp    FillLine2I
+      jp    ThreeD@FillLine2I
 @NotDone:
       exx
       and   (hl)
@@ -889,7 +889,7 @@ function(FillLine1I):
       exx
       and   (hl)
       ld    (hl),a
-function(FillLine2I):
+function(ThreeD@FillLine2I):
       set   7,c
       ld    a,(bc)
       inc   c
@@ -911,7 +911,7 @@ function(FillLine2I):
       exx
       or    (hl)
       ld    (hl),a
-      jp    FillLine3I
+      jp    ThreeD@FillLine3I
 @NotDone:
       exx
       or    (hl)
@@ -936,7 +936,7 @@ function(FillLine2I):
       exx
       or    (hl)
       ld    (hl),a
-      jp    FillLine3I
+      jp    ThreeD@FillLine3I
 @SkipItAll:
       ld    e,a
       exx
@@ -947,7 +947,7 @@ function(FillLine2I):
       ld    h,0
       ld    l,a
       add   hl,de
-function(FillLine3I):
+function(ThreeD@FillLine3I):
       ld    a,(bc)
       res   7,c
       inc   c
@@ -967,7 +967,7 @@ function(FillLine3I):
       exx
       and   (hl)
       ld    (hl),a
-      jp    FillLine4I
+      jp    ThreeD@FillLine4I
 @NotDone:
       exx
       and   (hl)
@@ -991,17 +991,17 @@ function(FillLine3I):
       exx
       and   (hl)
       ld    (hl),a
-function(FillLine4I):
+function(ThreeD@FillLine4I):
       ld    hl,12
       add   hl,de
       ex    de,hl
       exx
       dec   l
       exx
-      jp    nz,FillLine1I
+      jp    nz,ThreeD@FillLine1I
       ret
 
-function(DrawGraph):
+function(ThreeD@DrawGraph):
       ld    a,(curGStyle)
       or    a
       jp    z,@NotTracing
@@ -1017,7 +1017,7 @@ function(DrawGraph):
       bcall _FPDiv
       bcall _OP2Set8
       bcall _FPMult
-      call  ConvertOP1
+      call  ThreeD@ConvertOP1
       push  af
 
       ld    hl,_Y
@@ -1031,10 +1031,10 @@ function(DrawGraph):
       bcall _FPDiv
       bcall _OP2Set8
       bcall _FPMult
-      call  ConvertOP1
+      call  ThreeD@ConvertOP1
       push  af
 
-      ld    hl,Strings@EntryName
+      ld    hl,ThreeD@Strings@EntryName
       rst   20h
       AppOnErr(@ErrorHandler)
       bcall _ParseInp
@@ -1051,7 +1051,7 @@ function(DrawGraph):
       ld    hl,_rangeZ
       call  Mov9ToOP2
       bcall _FPMult
-      call  ConvertOP1
+      call  ThreeD@ConvertOP1
 @OutRanged:
       ld    hl,_XYZTable + RES*RES*3
       pop   de    ;D = y
@@ -1068,7 +1068,7 @@ function(DrawGraph):
       di
       call  @GraphFunction
 
-      ld    hl,LineBegin
+      ld    hl,ThreeD@LineBegin
       ld    de,saveSScreen
       ld    bc,LineSize
       ldir
@@ -1089,16 +1089,16 @@ function(DrawGraph):
       ld    c,a
       push  bc
       ld    a,-AXISSIZE
-      call  RotatePoint
+      call  ThreeD@RotatePoint
       pop   bc
       ld    a,AXISSIZE
-      call  RotatePoint
+      call  ThreeD@RotatePoint
       ld    hl,_Flags
       bit   grfNoAxis,(hl)
       jr    nz,@NoXAxis
       ld    hl,(_XYTable + 0)
       ld    de,(_XYTable + 2)
-      call  Line
+      call  ThreeD@Line
 @NoXAxis:
       ld    de,_XYTable + 4
       ld    a,$80
@@ -1114,17 +1114,17 @@ function(DrawGraph):
       push  bc
       ld    a,b
       ld    b,-AXISSIZE
-      call  RotatePoint
+      call  ThreeD@RotatePoint
       pop   bc
       ld    a,b
       ld    b,AXISSIZE
-      call  RotatePoint
+      call  ThreeD@RotatePoint
       ld    hl,_Flags
       bit   grfNoAxis,(hl)
       jr    nz,@NoYAxis
       ld    hl,(_XYTable + 4)
       ld    de,(_XYTable + 6)
-      call  Line
+      call  ThreeD@Line
 @NoYAxis:
       ld    de,_XYTable + 8
       ld    a,$80
@@ -1140,17 +1140,17 @@ function(DrawGraph):
       push  bc
       ld    a,c
       ld    c,-AXISSIZE
-      call  RotatePoint
+      call  ThreeD@RotatePoint
       pop   bc
       ld    a,c
       ld    c,AXISSIZE
-      call  RotatePoint
+      call  ThreeD@RotatePoint
       ld    hl,_Flags
       bit   grfNoAxis,(hl)
       jr    nz,@NoZAxis
       ld    hl,(_XYTable + 8)
       ld    de,(_XYTable + 10)
-      call  Line
+      call  ThreeD@Line
 @NoZAxis:
 
 @NoAxes:
@@ -1370,7 +1370,7 @@ DoTransformPoints:
       jp    @OutRange
 @InRange:
       inc   c
-      call  RotatePoint
+      call  ThreeD@RotatePoint
 @OutRange:
       ld    a,e
       cp    (RES*RES*2) + 2         ; this is the loop counter value
@@ -1378,7 +1378,7 @@ DoTransformPoints:
 
       ld    hl,_Flags
       bit   1,(hl)
-      jp    z,WireFrame
+      jp    z,ThreeD@WireFrame
 
 ;FindFarCorner:
       ld    hl,(RotZX)  ;L = RotZX, H = RotZY
@@ -1408,12 +1408,12 @@ DoTransformPoints:
 
       ld    c,RES - 1
       dec   b
-      jp    z,DrawGraph2
+      jp    z,ThreeD@DrawGraph2
       dec   b
-      jp    z,DrawGraph3
+      jp    z,ThreeD@DrawGraph3
       dec   b
-      jp    z,DrawGraph4
-function(DrawGraph1):
+      jp    z,ThreeD@DrawGraph4
+function(ThreeD@DrawGraph1):
       ld    iy,_XYTable + ((RES - 1) * 2)
 @Yloop:
       ld    b,RES - 1
@@ -1451,7 +1451,7 @@ function(DrawGraph1):
       jr    nz,@SkipPoly
       ld    h,(iy + ((RES * 2) + 1))
       ld    (_Poly2),hl
-      call  DrawPoly
+      call  ThreeD@DrawPoly
 @SkipPoly:
       pop   bc
       dec   iy
@@ -1464,7 +1464,7 @@ function(DrawGraph1):
       ld    iy,flags
       ret
 
-function(DrawGraph2):
+function(ThreeD@DrawGraph2):
       ld    iy,_XYTable + ((RES - 2) * 2 * RES) + ((RES - 1) * 2)
 @Yloop:
       ld    b,RES - 1
@@ -1497,7 +1497,7 @@ function(DrawGraph2):
       jr    nz,@SkipPoly
       ld    h,(iy + ((RES * 2) + 1))
       ld    (_Poly2),hl
-      call  DrawPoly
+      call  ThreeD@DrawPoly
 @SkipPoly:
       pop   bc
       ld    de,-(RES*2)
@@ -1510,7 +1510,7 @@ function(DrawGraph2):
       ld    iy,flags
       ret
 
-function(DrawGraph3):
+function(ThreeD@DrawGraph3):
       ld    iy,_XYTable + ((RES - 2) * 2 * RES) + 2
 @Yloop:
       ld    b,RES - 1
@@ -1548,7 +1548,7 @@ function(DrawGraph3):
       jr    nz,@SkipPoly
       ld    h,(iy + ((RES * 2) + 1))
       ld    (_Poly2),hl
-      call  DrawPoly
+      call  ThreeD@DrawPoly
 @SkipPoly:
       pop   bc
       inc   iy
@@ -1561,7 +1561,7 @@ function(DrawGraph3):
       ld    iy,flags
       ret
 
-function(DrawGraph4):
+function(ThreeD@DrawGraph4):
       ld    iy,_XYTable + 2
 @Yloop:
       ld    b,RES - 1
@@ -1598,7 +1598,7 @@ function(DrawGraph4):
       jr    nz,@SkipPoly
       ld    h,(iy + ((RES * 2) + 1))
       ld    (_Poly2),hl
-      call  DrawPoly
+      call  ThreeD@DrawPoly
 @SkipPoly:
       pop   bc
       ld    de,RES*2
@@ -1627,8 +1627,8 @@ SavePlatypus:
       ld    (PlatypiFill),a
       ret
 
-function(WireFrame):
-      ld    hl,LineBegin
+function(ThreeD@WireFrame):
+      ld    hl,ThreeD@LineBegin
       ld    de,saveSScreen
       ld    bc,LineSize
       ldir
@@ -1650,7 +1650,7 @@ function(WireFrame):
       jr    nz,@Skip1
       ld    d,(iy +  3)
       push  bc
-      call  Line
+      call  ThreeD@Line
       pop   bc
 @Skip1:
       ld    a,c
@@ -1665,7 +1665,7 @@ function(WireFrame):
       jr    nz,@Skip2
       ld    d,(iy + ((RES*2) + 1))
       push  bc
-      call  Line
+      call  ThreeD@Line
       pop   bc
 @Skip2:
       inc   iy
@@ -1683,7 +1683,7 @@ _Poly4      = $86FE
 _ScanBuffer = $8700
 
 ;(D,E)-(B,C)
-function(ScanLine):
+function(ThreeD@ScanLine):
       ld    a,c
       sub   e
       ld    c,a
@@ -1834,7 +1834,7 @@ function(ScanLine):
       djnz  @NegSlope@Yindep@Loop
       ret
 
-function(MultAxDE):
+function(ThreeD@MultAxDE):
       ld    b,-1
       add   a,a
       jr    nc,@NotNeg
@@ -1946,7 +1946,7 @@ function(MultAxDE):
 #define MULT32_1B add hl,hl \ rl c \ rl b \ add hl,de \ jr nc,$+3 \ inc bc
 
 ; 0000110010001110
-function(SinTheta):
+function(ThreeD@SinTheta):
       xor   a
       ld    b,a
       sla   e
@@ -2002,7 +2002,7 @@ function(SinTheta):
       ret
 
 ; 0111111101100010
-function(CosTheta):
+function(ThreeD@CosTheta):
       xor   a
       ld    b,a
       sla   e
@@ -2070,22 +2070,22 @@ function(CosTheta):
 RotatePositive:
       push  de
       push  hl
-      call  CosTheta
+      call  ThreeD@CosTheta
       pop   de
       push  de
       push  bc
-      call  SinTheta
+      call  ThreeD@SinTheta
       pop   hl
       or    a
       sbc   hl,bc
       pop   de
       push  hl
-      call  CosTheta
+      call  ThreeD@CosTheta
       pop   hl
       pop   de
       push  hl
       push  bc
-      call  SinTheta
+      call  ThreeD@SinTheta
       pop   hl
       add   hl,bc
       pop   de
@@ -2098,28 +2098,28 @@ RotatePositive:
 RotateNegative:
       push  de
       push  hl
-      call  CosTheta
+      call  ThreeD@CosTheta
       pop   de
       push  de
       push  bc
-      call  SinTheta
+      call  ThreeD@SinTheta
       pop   hl
       add   hl,bc
       pop   de
       push  hl
-      call  CosTheta
+      call  ThreeD@CosTheta
       pop   hl
       pop   de
       push  hl
       push  bc
-      call  SinTheta
+      call  ThreeD@SinTheta
       pop   hl
       or    a
       sbc   hl,bc
       pop   de
       ret
 
-function(RotatePoint):
+function(ThreeD@RotatePoint):
       push  hl
       push  de
       ld    e,a
@@ -2199,11 +2199,11 @@ function(RotatePoint):
       dec   h
       ld    c,(hl)
       pop   de
-      call  MultAxDE
+      call  ThreeD@MultAxDE
       ld    a,c
       ld    c,h
       pop   de
-      call  MultAxDE
+      call  ThreeD@MultAxDE
       ld    a,h
       pop   de
       pop   hl

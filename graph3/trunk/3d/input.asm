@@ -1,11 +1,11 @@
-function(CreateTemp):
+function(ThreeD@CreateTemp):
       ld    a,(hl)
       inc   hl
       push  hl
       ld    h,(hl)
       ld    l,a
       push  hl
-      call  DeleteEntry
+      call  ThreeD@DeleteEntry
       pop   hl
       push  hl
       bcall _CreateEqu
@@ -21,8 +21,8 @@ function(CreateTemp):
       ldir
       ret
 
-function(DeleteEntry):
-      call  LookupEntry
+function(ThreeD@DeleteEntry):
+      call  ThreeD@LookupEntry
       ret   c
 @Del  ld    a,(hl)
       push  af
@@ -30,27 +30,27 @@ function(DeleteEntry):
       pop   af
       ret
 
-function(LookupGraph):
-      ld    hl,Strings@GraphName
+function(ThreeD@LookupGraph):
+      ld    hl,ThreeD@Strings@GraphName
       rst   20h
       bcall _ChkFindSym
       ret   nc
       bjump _ErrUndefined
 
-function(LookupEntry):
-      ld    hl,Strings@EntryName
+function(ThreeD@LookupEntry):
+      ld    hl,ThreeD@Strings@EntryName
       rst   20h
       bcall _ChkFindSym
       ret
 
-function(Quit):
+function(ThreeD@Quit):
       res   textWrite,(iy + sGrFlags)
       xor   a
       ld    (iy + textFlags),a
       ld    a,(SaveMode)
       ld    (flags + grfModeFlags),a
-      call  DeleteEntry
-      call  LookupGraph
+      call  ThreeD@DeleteEntry
+      call  ThreeD@LookupGraph
       ld    hl,flags + graphFlags
       ld    a,(hl)
       set   graphDraw,(hl)
@@ -88,7 +88,7 @@ function(Quit):
 JumpHL:
       jp    (hl)
 
-function(VPutsCenter):
+function(ThreeD@VPutsCenter):
       ld    b,0
       ld    de,OP1+1
 @Loop:
@@ -112,32 +112,32 @@ function(VPutsCenter):
       bcall _VPutS
       ret
 
-function(MessageBox):
+function(ThreeD@MessageBox):
       ld    a,(flags + sGrFlags)
       push  af
       push  de
       push  hl
       res   textWrite,(iy + sGrFlags)
-      call  DialogBox
+      call  ThreeD@DialogBox
       pop   hl
       ld    a,19
       ld    (penRow),a
-      call  VPutsCenter
+      call  ThreeD@VPutsCenter
       pop   hl
       ld    a,25
       ld    (penRow),a
-      call  VPutsCenter
+      call  ThreeD@VPutsCenter
       ld    a,36
       ld    (penRow),a
-      ld    hl,Strings@AnyKey
-      call  VPutsCenter
+      ld    hl,ThreeD@Strings@AnyKey
+      call  ThreeD@VPutsCenter
       pop   af
       ld    (flags + sGrFlags),a
       bcall _RunIndicOff
       bcall _GetKey
       ret
 
-function(DialogBox):
+function(ThreeD@DialogBox):
       ld    hl,saveSScreen
       push  hl
       bcall _SaveDisp
@@ -198,9 +198,9 @@ modeTemp    = appBackupScreen + 600
 saveStuff   = appBackupScreen + 750
 tempSP      = appBackupScreen + 766
 
-function(AppChangeHook):
+function(ThreeD@AppChangeHook):
       ld    d,a
-      call  CheckGraphMode
+      call  ThreeD@CheckGraphMode
       jp    z,@Done
 
       ld    a,b
@@ -212,14 +212,14 @@ function(AppChangeHook):
       push  hl
       push  de
       push  bc
-      call  LookupEntry
+      call  ThreeD@LookupEntry
       ex    de,hl
       ld    a,(hl)
       inc   hl
       ld    h,(hl)
       ld    l,a
       push  hl
-      call  LookupGraph
+      call  ThreeD@LookupGraph
       ld    h,d
       ld    l,e
       ld    c,(hl)
@@ -267,7 +267,7 @@ function(AppChangeHook):
       add   hl,de
       ex    de,hl
       push  de
-      call  LookupEntry
+      call  ThreeD@LookupEntry
       ld    a,(hl)
       ex    de,hl
       pop   de
@@ -312,12 +312,12 @@ function(AppChangeHook):
       cp    kError
       jr    z,@Done
       cp    kFormat
-      jp    z,ModeHook
+      jp    z,ThreeD@ModeHook
 @Quit:
       push  hl
       push  de
       push  bc
-      call  Quit
+      call  ThreeD@Quit
       pop   bc
       pop   de
       pop   hl
@@ -325,14 +325,14 @@ function(AppChangeHook):
       ld    a,d
       ret
 
-function(YeditHook):
+function(ThreeD@YeditHook):
       cp    6
       jp    nz,@NotKey
       ld    a,b
       cp    kApp
       ld    a,6
       jp    nz,@NotKey
-      call  CheckGraphMode
+      call  ThreeD@CheckGraphMode
       ld    a,kYequ | $80
       jp    nz,@ResetView
 
@@ -348,8 +348,8 @@ function(YeditHook):
       in    a,(6)
       ld    hl,MenuHook
       bcall _SetMenuHook
-      ld    hl,KeyHook
-      bcall _SetGetkeyHook
+      ld    hl,ThreeD@KeyHook
+      bcall _SetGetKeyHook
       res   0,(iy + $34)
 
       res   graphDraw,(iy + graphFlags)   ; we have our own graphDraw flag
@@ -357,16 +357,16 @@ function(YeditHook):
       set   textWrite,(iy + sGrFlags)
       push  hl
       bcall _CloseEditEqu
-      ld    hl,Strings@GraphName
+      ld    hl,ThreeD@Strings@GraphName
       rst   20h
       bcall _ChkFindSym
       jr    nc,@Exists
-      ld    hl,Strings@AppvarInitSize
+      ld    hl,ThreeD@Strings@AppvarInitSize
       bcall _CreateAppVar
       inc   de
       inc   de
-      ld    hl,Strings@AppvarInit
-      ld    bc,Strings@AppvarInitSize
+      ld    hl,ThreeD@Strings@AppvarInit
+      ld    bc,ThreeD@Strings@AppvarInitSize
       ldir
 @Exists:
       ld    a,b
@@ -374,7 +374,7 @@ function(YeditHook):
       jr    z,@NotArchived
       bcall _Arc_Unarc
 @NotArchived:
-      call  LookupGraph
+      call  ThreeD@LookupGraph
       ex    de,hl
       inc   hl
       inc   hl
@@ -388,7 +388,7 @@ function(YeditHook):
       inc   de
       ldi
       jp    pe,@SaveGrid
-      call  CreateTemp
+      call  ThreeD@CreateTemp
       pop   hl
 
       ld    a,($9780)   ;(y0LineType + 1)
@@ -417,7 +417,7 @@ function(YeditHook):
       bjump _SendKPress
 
 @NotKey:
-      call  CheckGraphMode
+      call  ThreeD@CheckGraphMode
       ret   z
       or    a
       jr    nz,@Not0
@@ -460,7 +460,7 @@ function(YeditHook):
       ld    a,(winTop)
       dec   a
       ld    (curRow),a
-      ld    hl,Strings@Graph3
+      ld    hl,ThreeD@Strings@Graph3
       call  PutsApp
       bcall _homeUp
       or    $FF
@@ -497,7 +497,7 @@ function(YeditHook):
       bcall _PutC
       ld    a,$81
       bcall _PutC
-;     ld    hl,Strings@EntryName
+;     ld    hl,ThreeD@Strings@EntryName
 ;     rst   20h
       xor   a
       ret
@@ -506,7 +506,7 @@ function(YeditHook):
       xor   a
       ret
 
-function(WindowHook):
+function(ThreeD@WindowHook):
       push  af
       ld    a,(cxCurApp)
       cp    kWindow
@@ -516,7 +516,7 @@ function(WindowHook):
       ret
 @Possible:
       pop   af
-      call  CheckGraphMode
+      call  ThreeD@CheckGraphMode
       ret   z
       or    a
       jr    nz,@Not0
@@ -628,7 +628,7 @@ function(WindowHook):
 @Zmin .db "Zmin",0
 @Zmax .db "Zmax",0
 
-function(CheckGraphMode):
+function(ThreeD@CheckGraphMode):
       ld    e,a
       ld    a,(flags + grfModeFlags)
       and   %11110000
@@ -642,7 +642,7 @@ function(CheckGraphMode):
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-function(ModeHook):
+function(ThreeD@ModeHook):
       ld    hl,$97A2    ; current selection
       ld    (hl),0
 
@@ -1056,7 +1056,7 @@ CursorHook:
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-function(KeyHook):
+function(ThreeD@KeyHook):
       .db   $83
       cp    kSPlot
       jr    z,@NotIn3D
@@ -1128,9 +1128,9 @@ function(KeyHook):
       ld    bc,31*12
       ldir
 
-      ld    hl,Strings@NotAvailable1
-      ld    de,Strings@NotAvailable2
-      call  MessageBox
+      ld    hl,ThreeD@Strings@NotAvailable1
+      ld    de,ThreeD@Strings@NotAvailable2
+      call  ThreeD@MessageBox
       cp    kQuit
       ret   z
 
@@ -1151,7 +1151,7 @@ function(MenuHook):
       jr    z,@Platypi
       cp    $04 - 1     ; check for zoom menu (- 1 on account of dec a)
       jr    nz,@Not0
-      ld    hl,Strings@ZoomMenu
+      ld    hl,ThreeD@Strings@ZoomMenu
       ld    de,tempSwapArea
       push  de
       call  Mov9
@@ -1164,7 +1164,7 @@ function(MenuHook):
       ld    a,(menuCurrent)
       dec   a
       jr    nz,@Not2
-      ld    hl,Strings@Platypi
+      ld    hl,ThreeD@Strings@Platypi
       ld    de,OP1
       push  de
       ld    bc,17
@@ -1178,7 +1178,7 @@ function(MenuHook):
       ret
 
 @Platypi:
-      ld    hl,Strings@PlatypiMenu
+      ld    hl,ThreeD@Strings@PlatypiMenu
       ld    de,tempSwapArea
       push  de
       call  Mov9

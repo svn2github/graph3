@@ -1,6 +1,6 @@
-function(Runge):
+function(DEQ@Runge):
 	push	de
-	call	LookupAppVar
+	call	DEQ@LookupAppVar
 	ld	hl,RKEvalOffset
 	add	hl,de
 	pop	de
@@ -135,7 +135,7 @@ function(Runge):
 	bcall	_RclSysTok
 	rst	18h ;rPUSHREALO1
 	bcall	_OP1ToOP6
-	call	StoT			;starting point
+	call	DEQ@StoT			;starting point
 	ld	a,Xstep
 	bcall	_RclSysTok
 	pop	af
@@ -172,7 +172,7 @@ function(Runge):
 @LoopF1Known:
 	;Check if stepsize is large enough
 	;IX=[Y*,step,X,X_target,...]
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	de,-9
 	add	hl,de
 
@@ -227,7 +227,7 @@ function(Runge):
 	or	a
 	jr	nz,@NoDouble
 	;zero error, double stepsize
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	bc,-9
 	add	hl,bc
 	rst	20h ;rMOV9TOOP1
@@ -236,15 +236,15 @@ function(Runge):
 	jr	@GuessSkip
 @NoDouble:
 	rst	08h ;rOP1TOOP2
-	call	LoadDiftol
+	call	DEQ@LoadDiftol
 	bcall	_FPDiv
 	ld	hl,$257F		;.25
-	call	LoadOP2
+	call	DEQ@LoadOP2
 	bcall	_YToX
 	ld	hl,$907F		;.9
-	call	LoadOP2
+	call	DEQ@LoadOP2
 	bcall	_FPMult
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	bc,-9
 	add	hl,bc
 	bcall	_Mov9ToOP2
@@ -255,15 +255,15 @@ function(Runge):
 	rst	18h ;rPUSHREALO1	;FPS=[step_guess,f4*,Yn+1*,f1*,Y*,step,X,X_target,...]
 	;OP2=errest
 
-	call	LoadDiftol
+	call	DEQ@LoadDiftol
 	bcall	_CpOP1OP2
 	push	af
 	ld	hl,$2080		;2
 	jr	nc,@ErrestSkip
 	ld	hl,$507F		;.5
 @ErrestSkip:
-	call	LoadOP2
-	call	Runge@GetIXPointer
+	call	DEQ@LoadOP2
+	call	DEQ@Runge@GetIXPointer
 	ld	bc,-9
 	add	hl,bc
 	rst	20h ;rMOV9TOOP1	;step
@@ -275,7 +275,7 @@ function(Runge):
 	bcall	_Min
 	;min(.5h,guess) or min(2h,guess)
 
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	bc,-9
 	add	hl,bc
 	bcall	_Mov9ToOP2		;step
@@ -285,7 +285,7 @@ function(Runge):
 	push	bc
 	and	$80
 	ld	(OP1),a
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	bc,9
 	or	a
 	sbc	hl,bc
@@ -297,7 +297,7 @@ function(Runge):
 	jr	c,@Retry		;error too big,retry step
 	;step succeeded
 	;FPS=[f4*,Yn+1*,f1*,Y*,step,X,X_target,...]
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	bc,-9*2
 	add	hl,bc
 	push	hl
@@ -306,7 +306,7 @@ function(Runge):
 	pop	de
 	ld	hl,OP1
 	call	Mov9			;update X
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	bc,-9*3
 	add	hl,bc
 	ld	de,OP2
@@ -336,12 +336,12 @@ function(Runge):
 @ExitLoop:
 	;end RK
 	;invalidate cache after RK is finished
-	call	LoadSimpleCacheAddress
+	call	DEQ@LoadSimpleCacheAddress
 	res	cacheSimpleValidBit,(hl)
 
 	pop	de
 	push	de
-	call	CountEquations
+	call	DEQ@CountEquations
 	add	a,a
 	add	a,2			;*2+2
 	call	DeallocFPSA
@@ -357,7 +357,7 @@ function(Runge):
 	;FPS=[f4*,Yn+1*,f1*,Y*,step_updated,X,X_target,...]
 	pop	de
 	push	de
-	call	CountEquations
+	call	DEQ@CountEquations
 	add	a,a			;remove both f4* and Yn+1*
 	call	DeallocFPSA
 	;FPS=[f1*,Y*,step_updated,X,X_target,...]
@@ -372,14 +372,14 @@ function(Runge):
 	push	hl
 	bcall	_PopRealO2
 	pop	hl
-function(Runge@MultAdd):
+function(DEQ@Runge@MultAdd):
 	rst	20h ;rMOV9TOOP1
 	bcall	_FPMult
 	bcall	_OP4ToOP2
 	rst	30h ;rFPADD
 	ret
 
-function(Runge@ExecuteEqu):
+function(DEQ@Runge@ExecuteEqu):
 	rlc	d			;skip first two bits
 	rlc	d
 	ld	e,5
@@ -387,12 +387,12 @@ function(Runge@ExecuteEqu):
 	rlc	d
 	jr	nc,@SkipExec
 	push	de
-	call	LoadEquation
+	call	DEQ@LoadEquation
 	push	ix
 	bcall	_ParseInp
 	pop	ix
 	bcall	_CkOP1Real
-	jp	nz,ParserHook@ArgumentError
+	jp	nz,DEQ@ParserHook@ArgumentError
 	rst	18h ;rPUSHREALO1	;fx
 	pop	de
 @SkipExec:
@@ -402,7 +402,7 @@ function(Runge@ExecuteEqu):
 	jr	nz,@Loop
 	ret
 
-function(Runge@CalcErrest):
+function(DEQ@Runge@CalcErrest):
 	;FPS=[f4*,Yn+1*,f3*,f2*,f1*,Y*,step,X,X_target,...]
 	;IX=[Y*,step,X]
 	push	de
@@ -436,32 +436,32 @@ function(Runge@CalcErrest):
 	pop	hl
 	pop	de
 	push	de
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	pop	de
 	push	de
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	push	hl
 	ld	de,Runge@F3Err
-	call	Runge@MultAdd@DE
+	call	DEQ@Runge@MultAdd@DE
 	bcall	_OP1ToOP4
 
 	pop	hl
 	pop	de
 	push	de
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	push	hl
 	ld	de,Runge@F2Err
-	call	Runge@MultAdd@DE
+	call	DEQ@Runge@MultAdd@DE
 	bcall	_OP1ToOP4
 
 	pop	hl
 	pop	de
 	push	de
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	ld	de,Runge@F1Err
-	call	Runge@MultAdd@DE
+	call	DEQ@Runge@MultAdd@DE
 
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	de,-9
 	add	hl,de
 	bcall	_Mov9ToOP2		;step
@@ -483,42 +483,42 @@ function(Runge@CalcErrest):
 	jr	nz,@Loop
 
 	ld	bc,2*256+2
-	call	Runge@DeallocMiddleFPS	;delete f2* and f3* keep Yn+1* and f4*
+	call	DEQ@Runge@DeallocMiddleFPS	;delete f2* and f3* keep Yn+1* and f4*
 
 	rst	18h ;rPUSHREALO1
 	;FPS=[errest,f4*,Yn+1*,f1*,Y*,step,X,X_target,...]
 	ret
 
-function(Runge@UpdateXY):
+function(DEQ@Runge@UpdateXY):
 	push	de
 	push	af
 
 	;calculate h*a*0.1 here
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	de,-9
 	add	hl,de
 	rst	20h ;rMOV9TOOP1
 	pop	hl
 	ld	l,$7F
-	call	LoadOP2
+	call	DEQ@LoadOP2
 	;OP2=a*0.1
 	bcall	_FPMult
 	bcall	_OP1ToOP3		;h*a*0.1
 
 	rst	08h ;rOP1TOOP2
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	de,-9*2
 	add	hl,de
 	rst	20h ;rMOV9TOOP1
 	rst	30h ;rFPADD
 	bcall	_OP1ToOP6
-	call	StoT			;X=X+h*a*0.1
+	call	DEQ@StoT			;X=X+h*a*0.1
 	bcall	_OP3ToOP4		;h*a*0.1
 
 	pop	de
 	push	de
-	call	CountEquations
-	call	MultABy9
+	call	DEQ@CountEquations
+	call	DEQ@MultABy9
 	ld	hl,(FPS)
 	ld	b,0
 	ld	c,a
@@ -546,7 +546,7 @@ function(Runge@UpdateXY):
 	bcall	_FPMult
 	rst	08h ;rOP1TOOP2
 
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	pop	de
 	push	de
 
@@ -575,36 +575,36 @@ function(Runge@UpdateXY):
 	cp	e
 	jr	nz,@Loop
 	push	de
-	call	Runge@SaveYCaches
+	call	DEQ@Runge@SaveYCaches
 	pop	de
-	call	CountEquations
+	call	DEQ@CountEquations
 DeallocFPSA:
 	ld	l,a
 	ld	h,0
 	bcall	_DeallocFPS
 	ret
 
-function(Runge@UpdateFinalXY):
+function(DEQ@Runge@UpdateFinalXY):
 	;FPS=[f3*,f2*,f1*,Y*,step,X,X_target,...]
 	;IX=[Y*,step,X]
 	push	de
 
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	de,-9
 	add	hl,de
 	rst	20h ;rMOV9TOOP1	;step
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	de,-9*2
 	add	hl,de
 	bcall	_Mov9ToOP2		;X
 	rst	30h ;rFPADD		;X+h
 	bcall	_OP1ToOP6
-	call	StoT
+	call	DEQ@StoT
 
 	pop	de
 	push	de
 	ld	hl,(FPS)
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	pop	de
 	ld	e,5
 
@@ -633,21 +633,21 @@ function(Runge@UpdateFinalXY):
 	pop	hl
 	pop	de
 	push	de
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	push	hl
 	ld	de,Runge@F2Inc
-	call	Runge@MultAdd@DE
+	call	DEQ@Runge@MultAdd@DE
 	bcall	_OP1ToOP4
 
 	pop	hl
 	pop	de
 	push	de
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	push	hl
 	ld	de,Runge@F1Inc
-	call	Runge@MultAdd@DE
+	call	DEQ@Runge@MultAdd@DE
 
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	ld	de,-9
 	add	hl,de
 	bcall	_Mov9ToOP2		;step
@@ -656,7 +656,7 @@ function(Runge@UpdateFinalXY):
 	pop	hl
 	pop	de
 	push	de
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	bcall	_Mov9ToOP2		;Y
 	rst	30h ;rFPADD		;Y+h(2/9*f1+1/3*f2+4/9*f3)
 	rst	18h ;rPUSHREALO1	;FPS=[Yn+1*,f3*,f2*,f1*,Y*,step,X,X_target,...]
@@ -669,7 +669,7 @@ function(Runge@UpdateFinalXY):
 	ld	a,-1
 	cp	e
 	jr	nz,@Loop
-	call	Runge@SaveYCaches
+	call	DEQ@Runge@SaveYCaches
 	ret
 
 ;def interpolate(xa,ya,fa,xb,yb,fb,x):
@@ -682,21 +682,21 @@ function(Runge@UpdateFinalXY):
 ;    row4   =(row4-row3)/divider
 ;    result =ya+(x-xa)*(fa+(x-xa)*(row3+(x-xb)*row4))
 ;    return result
-function(Runge@Interpolate):
+function(DEQ@Runge@Interpolate):
 	;FPS=[X_target,...]
 	push	de
-	call	Runge@LookupEndpointCache
+	call	DEQ@Runge@LookupEndpointCache
 	inc	hl			;assume both caches are valid
 	pop	de
 	push	de
 	push	hl
-	call	Runge@InterpolateLoadCache
+	call	DEQ@Runge@InterpolateLoadCache
 	;FPS=[Xa,Ya,Fa,X_target,...]
 	pop	hl
 	pop	de
 	ld	bc,endpointCacheBlockSize
 	add	hl,bc
-	call	Runge@InterpolateLoadCache
+	call	DEQ@Runge@InterpolateLoadCache
 	;FPS=[Xb,Yb,Fb,Xa,Ya,Fa,X_target,...]
 
 	bcall	_CpyTo1FPST		;Xb
@@ -776,7 +776,7 @@ function(Runge@Interpolate):
 	bcall	_FPDiv
 	ret
 
-function(Runge@InterpolateLoadCache):
+function(DEQ@Runge@InterpolateLoadCache):
 	push	de
 	push	hl
 	ld	hl,3*9
@@ -785,7 +785,7 @@ function(Runge@InterpolateLoadCache):
 	bcall	_CpyToFPST
 	pop	de
 	dec	e			;skip step
-	call	Runge@HLPlusCacheOffset
+	call	DEQ@Runge@HLPlusCacheOffset
 	ex	de,hl
 	bcall	_CpyToFPS1
 	ld	bc,5*9		;skip 5 floats
@@ -808,17 +808,17 @@ rungeCacheSize		= 1+endpointCacheBlockSize*2 ;X and Y1..Y6
 ;127..252			cache block 1
 
 
-function(Runge@LookupEndpointCache):
-	call LookupAppVar
+function(DEQ@Runge@LookupEndpointCache):
+	call DEQ@LookupAppVar
 	ex de,hl
 	ld bc,2+simpleCacheSize
 	add hl,bc
 	ret
 
-function(Runge@SaveEndpointCache):
+function(DEQ@Runge@SaveEndpointCache):
 	;FPS=[f4*,Yn+1*,step,X,X_target,...]
 	push	de
-	call	Runge@LookupEndpointCache
+	call	DEQ@Runge@LookupEndpointCache
 
 	ld	a,(hl)
 	xor	cacheSwitchMask
@@ -836,7 +836,7 @@ function(Runge@SaveEndpointCache):
 @2:
 
 	push	hl
-	call	Runge@GetIXPointer
+	call	DEQ@Runge@GetIXPointer
 	pop	de
 	ld	bc,-9*2
 	add	hl,bc
@@ -848,29 +848,29 @@ function(Runge@SaveEndpointCache):
 	push	hl
 	push	de
 	ld	hl,(FPS)
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	pop	de
 	push	de
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	pop	bc
 	pop	de
 	push	bc
-	call	Runge@SaveInAppvar;Save Y*
+	call	DEQ@Runge@SaveInAppvar;Save Y*
 
 	ex	de,hl
 	pop	de
 	push	hl
 	push	de
 	ld	hl,(FPS)
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	pop	bc
 	pop	de
-	call	Runge@SaveInAppvar;Save Y*
+	call	DEQ@Runge@SaveInAppvar;Save Y*
 	ret
 
-function(Runge@SaveYCaches):
+function(DEQ@Runge@SaveYCaches):
 	push	de
-	call	LoadSimpleCacheAddress
+	call	DEQ@LoadSimpleCacheAddress
 	ld	a,cacheSimpleValidMask
 	or	(hl)
 	ld	(hl),a
@@ -885,11 +885,11 @@ function(Runge@SaveYCaches):
 	push	hl
 	push	de
 	ld	hl,(FPS)
-	call	Runge@HLMinusEquNrTimes9
+	call	DEQ@Runge@HLMinusEquNrTimes9
 	pop	bc
 	pop	de
 	;fallthrough
-function(Runge@SaveInAppvar):
+function(DEQ@Runge@SaveInAppvar):
 	;DE contains address in appvar
 	;HL contains address of first value on fps
 	;B  contains equation bits
@@ -917,7 +917,7 @@ function(Runge@SaveInAppvar):
 	;HL is address of last value copied
 	ret
 
-function(Runge@CheckCache):	;check cache at HL, Z if cache is useful
+function(DEQ@Runge@CheckCache):	;check cache at HL, Z if cache is useful
 	push	de
 	bcall	_Mov9ToOP2		;X_Cache
 	bcall	_CpyTo1FPS1		;X_target
@@ -942,7 +942,7 @@ function(Runge@CheckCache):	;check cache at HL, Z if cache is useful
 	inc	a
 	ret
 
-function(Runge@LoadCache):	;B contains equation bits, HL contains address in cache
+function(DEQ@Runge@LoadCache):	;B contains equation bits, HL contains address in cache
 	ld	c,5
 	rlc	b
 	rlc	b			;skip first two bits
@@ -967,25 +967,25 @@ function(Runge@LoadCache):	;B contains equation bits, HL contains address in cac
 	;HL is start+6*9
 	ret
 
-function(Runge@DeallocMiddleFPS):	;keeps the first B floats on the FPS and deletes the following C floats from the FPS
+function(DEQ@Runge@DeallocMiddleFPS):	;keeps the first B floats on the FPS and deletes the following C floats from the FPS
 	;WARNING: B and C shouldn't be bigger than 4 because 5*6*9=270>255
 	ld	hl,(FPS)
 	push	bc
-	call	CountEquations
+	call	DEQ@CountEquations
 	pop	bc
 	ld	e,a
 	xor	a
 @ZDSb3:
 	add	a,e
 	djnz	@ZDSb3
-	call	MultABy9
+	call	DEQ@MultABy9
 	ld	d,a
 	ld	b,c
 	xor	a
 @ZDSb4:
 	add	a,e
 	djnz	@ZDSb4
-	call	MultABy9
+	call	DEQ@MultABy9
 	ld	e,a
 	push	de			;D=keep bytes E=delete bytes
 	ld	b,0
@@ -1011,7 +1011,7 @@ function(Runge@DeallocMiddleFPS):	;keeps the first B floats on the FPS and delet
 	bcall	_DeallocFPS1
 	ret
 
-function(MultABy9):		;destroys B
+function(DEQ@MultABy9):		;destroys B
 	ld	b,a
 	add	a,a
 	add	a,a
@@ -1019,8 +1019,8 @@ function(MultABy9):		;destroys B
 	add	a,b
 	ret
 
-function(Runge@HLMinusEquNrTimes9):
-	call	CountEquations
+function(DEQ@Runge@HLMinusEquNrTimes9):
+	call	DEQ@CountEquations
 	or	a
 	ret	z
 	ld	b,a
@@ -1030,7 +1030,7 @@ function(Runge@HLMinusEquNrTimes9):
 	djnz	@ZDSb5
 	ret
 
-function(Runge@HLPlusCacheOffset):
+function(DEQ@Runge@HLPlusCacheOffset):
 	ld a,5
 	sub e
 Runge@HLPlusATimes9:
@@ -1043,7 +1043,7 @@ Runge@HLPlusATimes9:
 	djnz @ZDSb6
 	ret
 
-function(Runge@LoadY0):
+function(DEQ@Runge@LoadY0):
 	rlc	d			;skip first two bits
 	rlc	d
 	ld	e,5
@@ -1051,7 +1051,7 @@ function(Runge@LoadY0):
 	rlc	d
 	jr	nc,@Skip
 	push	de
-	call	LoadYi0
+	call	DEQ@LoadYi0
 	rst	18h ;rPUSHREALO1
 	pop	de
 @Skip:
@@ -1061,7 +1061,7 @@ function(Runge@LoadY0):
 	jr	nz,@Loop
 	ret
 
-function(Runge@GetIXPointer):
+function(DEQ@Runge@GetIXPointer):
 	push	ix
 	pop	de
 	ld	hl,(fpBase)
