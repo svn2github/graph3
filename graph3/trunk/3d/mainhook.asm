@@ -56,11 +56,6 @@ _XYTable    = $8800 ; on _saveSScreen; must be aligned
 ; 8E63 is weird: should be 0
 
 function(ThreeD@GraphHook):
-	call SetCalcSpeed
-
-	call	ThreeD@CheckGraphMode
-	jp	z,@Allow
-
 	or	a
 	jr	nz,@Not0
 	call	@Key

@@ -93,6 +93,18 @@ function(ThreeD@CheckGraphMode):
       ld    a,e
       ret
 
+function(DEQ@CheckGraphMode):
+      ld    e,a
+      ld    a,(YEditHookState)
+      cp    DiffEquState
+      jr    z,@Z
+      xor   a
+      ld    a,e
+      ret
+@Z    or    $FF
+      ld    a,e
+      ret
+
 function(GetGraphMode):
 	ld a,(YEditHookState)
 	cp ThreeDState
@@ -117,6 +129,68 @@ function(SetCalcSpeed):
  	pop	af
  	ret
 
+;;;;;;;;;;;;;;;;
+function(YeditHook):
+	call  SetCalcSpeed
+
+	cp    6
+	jp    nz,@NotInstall
+	ld    a,b
+	cp    kApp
+	ld    a,6
+	jp    nz,@NotInstall
+	;Y= key pressed run install/uninstall routine
+	jp    ThreeD@FlipInstalled
+
+@NotInstall:
+	call  ThreeD@CheckGraphMode
+	jp    nz,ThreeD@YeditHook
+	call  DEQ@CheckGraphMode
+	ret   z
+	jp    DEQ@YeditHook
+
+;;
+
+function(WindowHook):
+	call  SetCalcSpeed
+
+	push	af
+	ld	a,(cxCurApp)
+	cp	kWindow
+	jr	z,@Possible
+	pop	af
+	xor	a
+	ret
+@Possible:
+	pop	af
+	call	ThreeD@CheckGraphMode
+	jp	nz,ThreeD@WindowHook
+	call	DEQ@CheckGraphMode
+	ret z
+	jp DEQ@WindowHook
+
+;;
+
+function(GraphHook):
+	call	SetCalcSpeed
+	call	ThreeD@CheckGraphMode
+	jp 	nz,ThreeD@GraphHook
+	call 	DEQ@CheckGraphMode
+	jp 	nz,DEQ@GraphHook
+	xor	a
+	ret
+
+;;
+
+function(AppChangeHook):
+	call  SetCalcSpeed
+	ld    d,a
+	call  GetGraphMode
+	jp    z,ThreeD@AppChangeHook
+	cp    DiffEquState
+	ld    a,d
+	jp    z,DEQ@AppChangeHook
+	ret
 
 ;;;;;;;;;;;;;;;;Start of ModeHook
 

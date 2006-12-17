@@ -200,10 +200,6 @@ saveStuff   = appBackupScreen + 750
 tempSP      = appBackupScreen + 766
 
 function(ThreeD@AppChangeHook):
-      ld    d,a
-      call  ThreeD@CheckGraphMode
-      jp    z,@Done
-
       ld    a,b
       or    a
       jp    z,@Done
@@ -326,13 +322,7 @@ function(ThreeD@AppChangeHook):
       ld    a,d
       ret
 
-function(ThreeD@YeditHook):
-      cp    6
-      jp    nz,@NotKey
-      ld    a,b
-      cp    kApp
-      ld    a,6
-      jp    nz,@NotKey
+function(ThreeD@FlipInstalled):
       call  ThreeD@CheckGraphMode
       ld    a,kYequ | $80
       jp    nz,@ResetView
@@ -421,9 +411,7 @@ function(ThreeD@YeditHook):
       xor   a
       bjump _SendKPress
 
-@NotKey:
-      call  ThreeD@CheckGraphMode
-      ret   z
+function(ThreeD@YeditHook):
       or    a
       jr    nz,@Not0
       ld    a,tY0+1     ; our special custom equation
@@ -512,17 +500,6 @@ function(ThreeD@YeditHook):
       ret
 
 function(ThreeD@WindowHook):
-      push  af
-      ld    a,(cxCurApp)
-      cp    kWindow
-      jr    z,@Possible
-      pop   af
-      xor   a
-      ret
-@Possible:
-      pop   af
-      call  ThreeD@CheckGraphMode
-      ret   z
       or    a
       jr    nz,@Not0
       or    $FF

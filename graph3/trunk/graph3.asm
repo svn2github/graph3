@@ -7,13 +7,13 @@
 
 	jp	Init		; we do this so that if they update the app, the pointers are intact
 HookY	.db	$83
-	jp	ThreeD@YeditHook
+	jp	YeditHook
 HookW	.db	$83
-	jp	ThreeD@WindowHook
+	jp	WindowHook
 HookG	.db	$83
-	jp	ThreeD@GraphHook
+	jp	GraphHook
 HookA	.db	$83
-	jp	ThreeD@AppChangeHook
+	jp	AppChangeHook
 
 function(Init):
 	ld	hl,saveSScreen

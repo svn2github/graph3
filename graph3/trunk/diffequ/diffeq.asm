@@ -2,7 +2,7 @@ StartApp:
 	call	DEQ@CreateAppvar
 
 	ld	a,(YEditHookState)
-	cp	$42
+	cp	DiffEquState
 	jr	z,DEQ@Restore
 
 	call	DEQ@SetupCalc
@@ -221,8 +221,6 @@ RemoveGotoErrorHandler:
 	jp	DisplayError
 
 function(DEQ@AppChangeHook):
-	.db	$83
-	call	SetCalcSpeed
 	push	af
 	push	hl
 	ld	a,b
@@ -465,9 +463,6 @@ function(DEQ@KeyHook):
 	ret
 
 function(DEQ@GraphHook):
-	.db	$83
-	call	SetCalcSpeed
-@Not2:
 	cp	$06
 	jr	nz,@Not6
 	ld	a,b
@@ -486,8 +481,6 @@ function(DEQ@GraphHook):
 	ret
 
 function(DEQ@YeditHook):
-	.db	$83
-	call	SetCalcSpeed
 	sub	$05
 	jr	nz,@Not5
 	ld	a,(EQS+7)
@@ -666,19 +659,6 @@ YEquMenu:
 	.db kExtendEcho2,kY6
 
 function(DEQ@WindowHook):	;PORTED (changed to support different menus, 3d functionality should be possible using this function)
-	.db	$83
-	call	SetCalcSpeed
-	push	af
-	ld	a,(cxCurApp)
-	cp	kWindow
-	jr	z,@Possible
-	pop	af
-	xor	a
-	ret
-@Possible:
-	pop	af
-;	call	CheckGraphMode
-;	ret	z
 	or	a
 	jr	nz,@Not0
 	or	$FF
@@ -1102,7 +1082,7 @@ YEquationEnd:
 YEquationSize = YEquationEnd - YEquation + 1
 
 function(DEQ@SetupCalc):
-	ld	a,$42
+	ld	a,DiffEquState
 	ld	(YEditHookState),a
 	call	DEQ@CreateAppvar
 	call	DEQ@LoadStatusAddress
