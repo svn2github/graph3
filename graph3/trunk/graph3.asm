@@ -5,47 +5,6 @@
 
 #define RES 11
 
-_Mon			equ	401Eh
-_sendKPress       equ   4024h
-_JForceCmd        equ   402Ah
-_newContext0      equ   4033h
-_cxPutAway        equ   4036h
-_RESETWINTOP      equ   42AFh
-_wputsEOL         equ   4522h
-_setNumWindow     equ   452Bh
-_homeUp		equ	4558h
-_saveCmdShadow    equ   4573h
-_rstrShadow       equ   4579h
-_saveTR           equ   4588h
-_restoreTR        equ   458Bh
-_LoadMenuNum	equ	45D9h
-_LoadMenuNumL	equ	45DCh
-_MenCatRet		equ	45DFh
-_RstrOScreen	equ	45F7h
-_SaveOScreen	equ	45FAh
-_numPPutAway	equ	477Ah
-_numRedisp		equ	477Dh
-_COORDISP		equ	4816h
-_Ceiling		equ	489Ah
-_PutXY            equ   489Dh
-_bufToTop		equ	4927h
-_rclToQueue       equ   49B4h
-_dispErrorScreen	equ	49DEh
-_POPCX            equ   49E1h
-_CheckSplitFlag   equ   49F0h
-_cxRedisp		equ	4C6Ch
-_ClearRow         equ   4CEDh
-_SetCursorHook    equ   4F60h
-_SetGetKeyHook	equ	4F66h
-_ClrCursorHook    equ   4F69h
-_SetGraphModeHook equ   4FB7h
-_SetRegraphHook   equ   4FEAh
-_SetTraceHook     equ   4FF3h
-_SetYeditHook     equ   4FCFh
-_SetWindowHook    equ   4FB1h
-_SetAppChangeHook equ   502Ch
-_SetMenuHook	equ	5083h
-
 	jp	Init		; we do this so that if they update the app, the pointers are intact
 HookY	.db	$83
 	jp	ThreeD@YeditHook
@@ -238,20 +197,10 @@ function(Init):
 	cp	e
 	ret
 
-;Some functions used in both 3d and diffequ mode
-function(PutsApp):
-      rst   20h
-      ld    hl,OP1
-      bcall _PutS
-      ret
+#include "shared.asm"
 
-function(Mov9ToOP2):
-	ld    de,OP2
-Mov9:
-	ldi \ ldi \ ldi
-	ldi \ ldi \ ldi
-	ldi \ ldi \ ldi
-	ret
+;include DEQ functionality
+#include "diffequ/diffeq.asm"
 
 ;Include 3D functionality
 #include "3d/mainhook.asm"

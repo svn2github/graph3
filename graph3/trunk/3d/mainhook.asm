@@ -56,22 +56,7 @@ _XYTable    = $8800 ; on _saveSScreen; must be aligned
 ; 8E63 is weird: should be 0
 
 function(ThreeD@GraphHook):
-	push	af
-	push	bc
-	bcall	_getBaseVer
-	cp	2
-	jr	nc,@above112
-	cp	1
-	jr	nz,@below112
-	ld	a,b
-	cp	13
-	jr	c,@below112
-@above112:
-	ld	a,$01		; more than 15mhz would be too fast...
-	bcall	_SetExSpeed
-@below112:
-	pop	bc
-	pop	af
+	call SetCalcSpeed
 
 	call	ThreeD@CheckGraphMode
 	jp	z,@Allow
@@ -661,5 +646,3 @@ function(ThreeD@Line):
 	ld	(hl),a
 	ret
 LineSize = $ - ThreeD@Line
-
-.end
