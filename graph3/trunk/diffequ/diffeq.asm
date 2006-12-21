@@ -1,44 +1,3 @@
-StartApp:
-	call	DEQ@CreateAppvar
-
-	ld	a,(YEditHookState)
-	cp	DiffEquState
-	jr	z,DEQ@Restore
-
-	call	DEQ@SetupCalc
-
-	in	a,(6)
-	ld	hl,DEQ@ParserHook
-	bcall	_SetParserHook
-
-	ld	hl,DEQ@AppChangeHook
-	bcall	_SetAppSwitchHook
-
-	ld	hl,DEQ@RegraphHook
-	bcall	_SetReGraphHook
-
-	ld	hl,DEQ@KeyHook
-	bcall	_SetGetKeyHook
-
-	ld	hl,DEQ@MenuHook
-	bcall	_SetMenuHook
-
-	ld	hl,DEQ@WindowHook
-	bcall	_SetWindowHook
-
-	ld	hl,DEQ@GraphHook
-	bcall	_SetGraphModeHook
-
-	ld	hl,DEQ@YeditHook
-	bcall	_SetYeditHook
-
-ExitApp:
-	bjump	_JForceCmdNoChar
-
-DEQ@Restore:
-	call	DEQ@RestoreCalc
-	jr	ExitApp
-
 function(DEQ@ParserHook):
 	.db	$83
 	call	SetCalcSpeed
@@ -221,21 +180,59 @@ RemoveGotoErrorHandler:
 	jp	DisplayError
 
 function(DEQ@AppChangeHook):
-	push	af
+	ld	a,b
+	or	a
+	jr	z,@Done
+
+	push	bc
+	push	de
 	push	hl
 	ld	a,b
-	cp	kYequ
+	add	a,a
+	cp	kYequ*2	;ignore last bit this way
 	call	z,@ExitYEqu
 	ld	b,1<<grfParamM
 	call	DEQ@SetGraphMode
 	pop	hl
-	pop	af
-	ld	b,1<<grfFuncM
+	pop	de
+	pop	bc
+
+	ld	a,b
+	add	a,a
+	jr	c,@Quit
+
+	ld	a,(cxCurApp)
+	cp	kYequ
+	jr	z,@Done
+	cp	kWindow
+	jr	z,@Done
+	cp	kGraph
+	jr	z,@Done
+	cp	kError
+	jr	z,@Done
 	cp	cxTableEditor
-	jr	z,DEQ@SetGraphMode	;let SetGraphMode return
+	jr	z,@Table
 	cp	kFormat
 	jp	z,ModeHook
+@Quit:
+	push	bc
+	push	de
+	push	hl
+	call	DEQ@RestoreCalc
+	pop	hl
+	pop	de
+	pop	bc
 	ret
+@Done:
+	ld	a,d
+	ret
+@Table:
+	push	bc
+	ld	b,1<<grfFuncM
+	call	DEQ@SetGraphMode
+	pop	bc
+	jr @Done
+
 
 function(DEQ@AppChangeHook@ExitYEqu):
 	AppOnErr(RemoveGotoErrorHandler)
@@ -1081,9 +1078,11 @@ YEquation:
 YEquationEnd:
 YEquationSize = YEquationEnd - YEquation + 1
 
-function(DEQ@SetupCalc):
-	ld	a,DiffEquState
-	ld	(YEditHookState),a
+;OmniCalc uses the first 20 bytes of appBackupScreen.
+HookBackup	= appBackupScreen + 29
+
+function(DEQ@Installation):
+	bcall	_CloseEditEqu	
 	call	DEQ@CreateAppvar
 	call	DEQ@LoadStatusAddress
 	;Save bits
@@ -1109,6 +1108,42 @@ function(DEQ@SetupCalc):
 	AppOffErr
 	call	DEQ@EnableEquations
 	bcall	_SetTblGraphDraw	;dirty graph and table
+
+	ld	de,HookBackup
+	ld	hl,menuHookPtr
+	ldi \ ldi \ ldi
+	ld	hl,ParserHookPtr
+	ldi \ ldi \ ldi
+	ld	hl,flags + $36
+	ldi
+	ld	hl,RegraphHookPtr
+	ldi \ ldi \ ldi
+	ld	hl,flags + $35
+	ldi
+	ld	hl,rawKeyHookPtr
+	ldi \ ldi \ ldi
+	ld	hl,flags + $34
+	ldi
+
+	in	a,(6)
+	ld	hl,DEQ@ParserHook
+	bcall	_SetParserHook
+
+	ld	hl,DEQ@RegraphHook
+	bcall	_SetReGraphHook
+
+	ld	hl,DEQ@KeyHook
+	bcall	_SetGetKeyHook
+
+	ld	hl,DEQ@MenuHook
+	bcall	_SetMenuHook
+
+	res	0,(iy + $34) ;disable GetCSCHook
+
+	ld	a,DiffEquState
+	ld	(YEditHookState),a
+
+	ld    a,kYequ + 1 ; dirty to force redraw
 	ret
 
 @Error:	;Memory is full, error during CreateEqu
@@ -1124,9 +1159,24 @@ function(DEQ@RestoreCalc):
 	call	DEQ@SaveEnabledEquations
 @NoSave:
 	xor	a
-	ld	(iy+$35),a
-	ld	(iy+$36),a		;disable hooks
 	ld	(YEditHookState),a	;not in diffequ mode anymore
+
+	ld	hl,HookBackup
+	ld	de,menuHookPtr
+	ldi \ ldi \ ldi
+	ld	de,ParserHookPtr
+	ldi \ ldi \ ldi
+	ld	de,flags + $36
+	ldi
+	ld	de,RegraphHookPtr
+	ldi \ ldi \ ldi
+	ld	de,flags + $35
+	ldi
+	ld	de,rawKeyHookPtr
+	ldi \ ldi \ ldi
+	ld	de,flags + $34
+	ldi
+
 	call	DEQ@DeleteEquations
 	call	DEQ@RestoreEquations
 	ld	b,1<<grfFuncM

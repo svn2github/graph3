@@ -52,7 +52,7 @@ function(Init):
 	jr	z,@Ok1
 	call	@CheckInstall
 	jp	nz,@Conflict
-	jr	@Uninstall
+	jp	@Uninstall
 @Ok1	bit	3,(iy+$35)
 	jr	z,@Ok2
 	ld	hl,$9B94 + 2
@@ -60,7 +60,7 @@ function(Init):
 	inc	a
 	jr	z,@Ok2
 	call	@CheckInstall
-	jr	nz,@Conflict
+	jp	nz,@Conflict
 	jr	@Uninstall
 @Ok2	bit	4,(iy+$35)
 	jr	z,@Ok3
@@ -89,6 +89,9 @@ function(Init):
       bcall	_DelVarArc
 @NonExistant:
 
+	xor	a
+	ld	(YEdithookState),a
+	
       in    a,(6)
       ld    hl,HookY
       bcall _SetYeditHook
@@ -105,6 +108,7 @@ function(Init):
 	call	ThreeD@MessageBox
 	cp	kYequ
 	jr	z,@Yequ
+ExitApp:
 	bjump	_JForceCmdNoChar
 @Yequ	ld	a,kYequ
 	bcall	_newContext0

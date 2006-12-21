@@ -322,11 +322,7 @@ function(ThreeD@AppChangeHook):
       ld    a,d
       ret
 
-function(ThreeD@FlipInstalled):
-      call  ThreeD@CheckGraphMode
-      ld    a,kYequ | $80
-      jp    nz,@ResetView
-
+function(ThreeD@Installation):
       ld    de,saveStuff - 8
       ld    hl,$9BC0    ;menuHookPtr
       ldi \ ldi \ ldi
@@ -402,14 +398,8 @@ function(ThreeD@FlipInstalled):
       ld    (YEditHookState),a
 
       ld    a,kYequ + 1 ; dirty to force redraw
-@ResetView:
-      ld    sp,(onSP)
-      res   6,(iy + curFlags)
-      ld    (cxCurApp),a
-      ld    a,kYequ
-      bcall _newContext0
-      xor   a
-      bjump _SendKPress
+      ret
+
 
 function(ThreeD@YeditHook):
       or    a

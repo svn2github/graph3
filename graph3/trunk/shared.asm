@@ -51,9 +51,15 @@ _SetAppSwitchHook equ   502Ch
 _SetAppChangeHook equ   502Ch
 _SetMenuHook	  equ	5083h
 
-GX1               equ   9780h
-YEditHookState	  equ   9B98h+3
 
+GX1               equ   9780h
+YEditHookPtr	  equ   9B98h
+YEditHookState	  equ   YEditHookPtr+3
+RegraphHookPtr	  equ	9BA0h
+ParserHookPtr	  equ	9BACh
+menuHookPtr	  equ	9BC0h
+
+;Randomly choosen values to be able to identify whether 3D or DEQ mode is active
 ThreeDState       equ   41h
 DiffEquState      equ   42h
 
@@ -140,7 +146,36 @@ function(YeditHook):
 	ld    a,6
 	jp    nz,@NotInstall
 	;Y= key pressed run install/uninstall routine
-	jp    ThreeD@FlipInstalled
+	call	ThreeD@CheckGraphMode
+	jr	nz,@Uninstall
+	call	DEQ@CheckGraphMode
+	jr	nz,@Uninstall
+	B_CALL	_GetKey
+	cp	k1
+	jr	z,@InstallThreeD
+	cp	k2
+	jr	z,@InstallDEQ
+	jr	@ResetView
+
+@InstallThreeD:
+	call	ThreeD@Installation
+	jr	@ResetView
+@InstallDEQ:
+	call	DEQ@Installation
+
+@ResetView:
+      ld    sp,(onSP)
+      res   6,(iy + curFlags)
+      ld    (cxCurApp),a
+      ld    a,kYequ
+      bcall _newContext0
+      xor   a
+      bjump _SendKPress
+
+@Uninstall:
+      ld    a,kYequ | $80
+      jr    @ResetView
+
 
 @NotInstall:
 	call  ThreeD@CheckGraphMode
