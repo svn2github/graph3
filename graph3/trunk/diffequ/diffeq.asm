@@ -1,3 +1,11 @@
+
+;OmniCalc uses the first 20 bytes of appBackupScreen and _Flags uses the 30th byte
+HookBackup	= appBackupScreen + 31
+TempGX1		= HookBackup + 15
+SaveModeDEQ	= TempGX1 + 6
+
+
+
 function(DEQ@ParserHook):
 	.db	$83
 	call	SetCalcSpeed
@@ -266,8 +274,6 @@ function(DEQ@AppChangeHook@ExitYEqu):
 	bit	smartGraph_inv,(iy+smartFlags)
 	call	nz,DEQ@ClearCache
 
-	call	DEQ@LoadSimpleCacheAddress
-	res	cacheSimpleValidBit,(hl)
 	;fill simple cache with T
 	call	DEQ@LoadSimpleCacheAddress
 	set	cacheSimpleValidBit,(hl)
@@ -351,6 +357,10 @@ function(DEQ@AppChangeHook@ExitYEqu):
 	cp	e
 	jr	nz,@Loop
 	bcall	_CleanAll
+
+	call	deq@loadsimplecacheaddress
+	res	cachesimplevalidbit,(hl)
+
 	AppOffErr
 	ret
 
@@ -1078,13 +1088,13 @@ YEquation:
 YEquationEnd:
 YEquationSize = YEquationEnd - YEquation + 1
 
-;OmniCalc uses the first 20 bytes of appBackupScreen.
-HookBackup	= appBackupScreen + 29
-
 function(DEQ@Installation):
 	bcall	_CloseEditEqu	
 	call	DEQ@CreateAppvar
 	call	DEQ@LoadStatusAddress
+	
+	ld	a,(flags+grfModeFlags)
+	ld	(SaveModeDEQ),a
 	;Save bits
 	set	SimultBit,(hl)
 	bit	grfSimul,(iy+grfDBFlags)
@@ -1096,12 +1106,7 @@ function(DEQ@Installation):
 	jr	nz,@ZDSf2
 	res	ExprBit,(hl)
 @ZDSf2:
-	;save Graphing styles
-	call	DEQ@LoadStyleAddress
-	ex	de,hl
-	ld	hl,GX1
-	ld	bc,6
-	ldir
+	call	DEQ@ExchangeGraphingStyles
 	call	DEQ@SaveEquations
 	AppOnErr(@Error)
 	call	DEQ@CreateEquations
@@ -1114,16 +1119,12 @@ function(DEQ@Installation):
 	ldi \ ldi \ ldi
 	ld	hl,ParserHookPtr
 	ldi \ ldi \ ldi
-	ld	hl,flags + $36
-	ldi
 	ld	hl,RegraphHookPtr
 	ldi \ ldi \ ldi
-	ld	hl,flags + $35
-	ldi
 	ld	hl,rawKeyHookPtr
 	ldi \ ldi \ ldi
 	ld	hl,flags + $34
-	ldi
+	ldi \ ldi \ ldi
 
 	in	a,(6)
 	ld	hl,DEQ@ParserHook
@@ -1161,26 +1162,24 @@ function(DEQ@RestoreCalc):
 	xor	a
 	ld	(YEditHookState),a	;not in diffequ mode anymore
 
+	ld	a,(SaveModeDEQ)
+	ld	(flags+grfModeFlags),a
+
 	ld	hl,HookBackup
 	ld	de,menuHookPtr
 	ldi \ ldi \ ldi
 	ld	de,ParserHookPtr
 	ldi \ ldi \ ldi
-	ld	de,flags + $36
-	ldi
 	ld	de,RegraphHookPtr
 	ldi \ ldi \ ldi
-	ld	de,flags + $35
-	ldi
 	ld	de,rawKeyHookPtr
 	ldi \ ldi \ ldi
 	ld	de,flags + $34
-	ldi
+	ldi \ ldi \ ldi
 
+	bcall	_SetTblGraphDraw	;dirty graph and table
 	call	DEQ@DeleteEquations
 	call	DEQ@RestoreEquations
-	ld	b,1<<grfFuncM
-	call	DEQ@SetGraphMode
 	call	DEQ@LoadStatusAddress
 	bit	SimultBit,(hl)	;Simultaneous mode is enabled
 	jr	nz,@ZDSf1
@@ -1190,8 +1189,19 @@ function(DEQ@RestoreCalc):
 	jr	nz,@ZDSf2
 	res	0,(iy+24)
 @ZDSf2:
-	;restore Graphing style 9780..9786 GX1..GX1+5
+	;fall-through
+
+function(DEQ@ExchangeGraphingStyles):
 	call	DEQ@LoadStyleAddress
+	push hl
+	ld	de,TempGX1
+	ld	bc,6
+	ldir
+	ld	hl,GX1
+	pop	de
+	ld	bc,6
+	ldir
+	ld	hl,TempGX1
 	ld	de,GX1
 	ld	bc,6
 	ldir
@@ -1524,10 +1534,6 @@ Xstep	= TSTEPt
 #include "diffequ/euler.asm"
 #include "diffequ/runge-kutta.asm"
 #include "diffequ/slopefield.asm"
-;#include "euler.asm"
-;#include "runge-kutta.asm"
-;#include "slopefield.asm"
-;#include "../shared.asm"
 
 cacheSwitchBit		= 0
 cache1ValidBit		= 1

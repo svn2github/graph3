@@ -89,109 +89,6 @@ function(ThreeD@Quit):
 JumpHL:
       jp    (hl)
 
-function(ThreeD@VPutsCenter):
-      ld    b,0
-      ld    de,OP1+1
-@Loop:
-      ld    a,(hl)
-      ld    (de),a
-      or    a
-      jr    z,@Done
-      inc   hl
-      inc   de
-      inc   b
-      jr    @Loop
-@Done:
-      ld    hl,OP1
-      ld    (hl),b
-      bcall _SStringLength
-      inc   hl
-      ld    a,48
-      srl   b
-      sub   b
-      ld    (penCol),a
-      bcall _VPutS
-      ret
-
-function(ThreeD@MessageBox):
-      ld    a,(flags + sGrFlags)
-      push  af
-      push  de
-      push  hl
-      res   textWrite,(iy + sGrFlags)
-      call  ThreeD@DialogBox
-      pop   hl
-      ld    a,19
-      ld    (penRow),a
-      call  ThreeD@VPutsCenter
-      pop   hl
-      ld    a,25
-      ld    (penRow),a
-      call  ThreeD@VPutsCenter
-      ld    a,36
-      ld    (penRow),a
-      ld    hl,ThreeD@Strings@AnyKey
-      call  ThreeD@VPutsCenter
-      pop   af
-      ld    (flags + sGrFlags),a
-      bcall _RunIndicOff
-      bcall _GetKey
-      ret
-
-function(ThreeD@DialogBox):
-      ld    hl,saveSScreen
-      push  hl
-      bcall _SaveDisp
-
-      ld    hl,saveSScreen + 192
-      call  @Horiz
-      inc   hl
-      ld    c,28
-@BigLoop:
-      ld    a,(hl)
-      and   %11111100
-      or    %00000010
-      ld    (hl),a
-      inc   hl
-      xor   a
-      ld    b,10
-@Loop2:
-      ld    (hl),a
-      inc   hl
-      djnz  @Loop2
-      ld    a,(hl)
-      or    %11000000
-      ld    (hl),a
-      inc   hl
-      dec   c
-      jr    nz,@BigLoop
-      call  @Horiz
-      ld    a,(hl)
-      or    %11000000
-      ld    (hl),a
-      inc   hl
-      call  @Horiz2
-      set   7,(hl)
-      ld    hl,saveSScreen + 192 + 12 + 11
-      res   6,(hl)
-
-      ld    b,64
-      pop   hl
-      bcall _RestoreDisp
-      ret
-
-@Horiz:
-      set   0,(hl)
-@Horiz2:
-      inc   hl
-      ld    b,10
-      ld    a,$FF
-@Loop1:
-      ld    (hl),a
-      inc   hl
-      djnz  @Loop1
-      ret
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 modeTemp    = appBackupScreen + 600
@@ -676,7 +573,7 @@ function(ThreeD@KeyHook):
 
       ld    hl,ThreeD@Strings@NotAvailable1
       ld    de,ThreeD@Strings@NotAvailable2
-      call  ThreeD@MessageBox
+      call  MessageBox
       cp    kQuit
       ret   z
 

@@ -37,11 +37,11 @@ function(Init):
 	xor	a
 	ld	(penRow),a
 	ld	hl,ThreeD@Strings@Title
-	call	ThreeD@VPutsCenter
+	call	VPutsCenter
 	ld	a,$39
 	ld	(penRow),a
 	ld	hl,ThreeD@Strings@Email
-	call	ThreeD@VPutsCenter
+	call	VPutsCenter
 	res	textInverse,(iy + textFlags)
 
 	bit	2,(iy+$35)
@@ -105,7 +105,7 @@ function(Init):
 	ld	hl,ThreeD@Strings@Installed1
 	ld	de,ThreeD@Strings@Installed2
 @Common:
-	call	ThreeD@MessageBox
+	call	MessageBox
 	cp	kYequ
 	jr	z,@Yequ
 ExitApp:
