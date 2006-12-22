@@ -204,9 +204,9 @@ function(YeditHook):
 	.dw @Strings@ChooseKeyDEQ
 	.dw @Strings@ChooseKeyESC
 @Strings@Choose1:
-	.db "Select graphing",0
+	.db "Select",6,"graphing",0
 @Strings@Choose2:
-	.db "mode to enter.",0
+	.db "mode",6,"to",6,"enter.",0
 @Strings@ChooseKey3D:
 	.db "3D",0
 @Strings@ChooseKeyDEQ:

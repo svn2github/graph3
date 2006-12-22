@@ -1,8 +1,8 @@
 function(ThreeD@Strings):
 @Title:
-	.db "Graph’  v1.1",6,6,"by  Kirk  Meyer",0
+	.db "Graph’  v2.0",6,6,"graph3.sf.net",0
 @Email:
-	.db "detachedsolutions.com",0
+	.db "Kirk  Meyer  &  Martin  Warmer",0
 
 @ZoomMenu:
 	.db 1		;how many headers?
@@ -22,9 +22,9 @@ function(ThreeD@Strings):
 	.db "SAVE THE PLATYPI",0
 
 @Installed1:
-	.db "Press",6,"Y=",6,"twice",6,"to",0
+	.db "Press  Y=  twice  to  enter",0
 @Installed2:
-	.db "enter",6,"3D",6,"mode.",0
+	.db "3D  or  DiffEqu  mode.",0
 
 @Removed1:
 	.db "Graph’",6,"has",6,"been",0

@@ -216,6 +216,12 @@ function(DEQ@AppChangeHook):
 	jr	z,@Done
 	cp	kGraph
 	jr	z,@Done
+	cp	kTblSet
+	jr	z,@Done
+	cp	kStatP
+	jr	z,@Done
+	cp	kZFactEd
+	jr	z,@Done
 	cp	kError
 	jr	z,@Done
 	cp	cxTableEditor
