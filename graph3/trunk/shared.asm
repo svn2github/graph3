@@ -158,15 +158,12 @@ function(YeditHook):
 	call	DEQ@CheckGraphMode
 	jr	nz,@Uninstall
 	
-	ld	hl,@Strings@ChooseTable
-	call	DialogBox
-	cp	kYequ
+	ld	hl,@MenuData
+	call	NumberedMenu
+	ld	a,d
+	cp	1
 	jr	z,@InstallThreeD
-	cp	kWindow
-	jr	z,@InstallThreeD
-	cp	kZoom
-	jr	z,@InstallDEQ
-	cp	kTrace
+	cp	2
 	jr	z,@InstallDEQ
 	jr	@ResetView
 
@@ -197,22 +194,13 @@ function(YeditHook):
 	ret   z
 	jp    DEQ@YeditHook
 
-@Strings@ChooseTable:
-	.dw @Strings@Choose1
-	.dw @Strings@Choose2
-	.dw @Strings@ChooseKey3D
-	.dw @Strings@ChooseKeyDEQ
-	.dw @Strings@ChooseKeyESC
-@Strings@Choose1:
-	.db "Select",6,"graphing",0
-@Strings@Choose2:
-	.db "mode",6,"to",6,"enter.",0
-@Strings@ChooseKey3D:
+@MenuData:
+	.db 3 ;nr of menu items
+	.db "GRAPHING MODE",0,0,0,0 ;has to be 17 bytes long
 	.db "3D",0
-@Strings@ChooseKeyDEQ:
-	.db "DIFF EQU",0
-@Strings@ChooseKeyESC:
-	.db "ESC",0
+	.db "Diff Equ",0
+	.db "Standard",0	
+
 ;;
 
 function(WindowHook):
@@ -283,101 +271,7 @@ function(MessageBox):
       bcall _GetKey
       ret
 
-function(DialogBox):
-      ld    a,(flags + sGrFlags)
-      push  af
-      push  hl
-      res   textWrite,(iy + sGrFlags)
-      call  DrawDialogBox
-      call  DrawSoftKeys
 
-      pop   hl
-      ld    e,(hl)
-      inc   hl
-      ld    d,(hl)
-      inc   hl
-      push  hl
-      ex    de,hl
-      ld    a,19
-      ld    (penRow),a
-      call  VPutsCenter
-
-      pop   hl
-      ld    e,(hl)
-      inc   hl
-      ld    d,(hl)
-      inc   hl
-      push  hl
-      ex    de,hl
-      ld    a,25
-      ld    (penRow),a
-      call  VPutsCenter
-
-      pop   hl
-      ld    e,(hl)
-      inc   hl
-      ld    d,(hl)
-      inc   hl
-      push  hl
-      ld    hl,57*256+15
-      ld    (penCol),hl
-      ex    de,hl
-      call  VPutSApp
-      
-      pop   hl
-      ld    e,(hl)
-      inc   hl
-      ld    d,(hl)
-      inc   hl
-      push  hl
-      ld    a,43
-      ld    (penCol),a
-      ex    de,hl
-      call  VPutSApp
-
-      pop   hl
-      ld    e,(hl)
-      inc   hl
-      ld    d,(hl)
-      ld    a,80
-      ld    (penCol),a
-      ex    de,hl
-      call  VPutSApp
-
-      pop   af
-      ld    (flags + sGrFlags),a
-      bcall _RunIndicOff
-      bcall _GetKey
-      ret
-
-function(DrawSoftKeys):
-      ld    hl,saveSScreen
-      push  hl
-      bcall _SaveDisp
-
-      ld    de,saveSScreen + (12*56)
-      ld    b,12
-      ld    a,$FF
-@Horiz:
-      ld    (de),a
-      inc   de
-      djnz  @Horiz     
-      ld    b,7
-@Vertical:
-      push  bc
-      ld    hl,@VerticalData
-      ld    bc,12
-      ldir 
-      pop   bc
-      djnz  @Vertical
-
-      ld    b,64
-      pop   hl
-      bcall _RestoreDisp
-      ret
-
-@VerticalData:
-      .db %00000000,%00000000,%00000000,%00000000,%00000010,%00000000,%00000000,%00000000,%00000000,%00010000,%00000000,%00000000
 
 function(DrawDialogBox):
       ld    hl,saveSScreen

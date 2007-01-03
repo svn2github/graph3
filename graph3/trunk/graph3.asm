@@ -201,6 +201,7 @@ ExitApp:
 	cp	e
 	ret
 
+#include "menu.asm"
 #include "shared.asm"
 
 ;include DEQ functionality
