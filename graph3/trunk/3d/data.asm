@@ -1,6 +1,6 @@
 function(ThreeD@Strings):
 @Title:
-	.db "Graph’  v2.0",6,6,"graph3.sf.net",0
+	.db "Graph’  v1.9",6,6,"graph3.sf.net",0
 @Email:
 	.db "Kirk  Meyer  &  Martin  Warmer",0
 
