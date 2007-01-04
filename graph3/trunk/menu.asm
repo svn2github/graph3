@@ -40,7 +40,7 @@ function(NumberedMenu):
 	pop	hl
 	cp kQuit
 	jr nz,@ZDS1
-	ld d,(hl)
+	ld d,1
 	ret
 @ZDS1:
 	sub	kUp
@@ -113,7 +113,7 @@ function(NumberedMenu):
 	jr @nmLoop
 @nmAlphaDown@scroll:
 	ld c,d
-	jr @nmLoop
+	jp @nmLoop
 	
 @nmMoveUp:				;Move up
 	ld	a,d

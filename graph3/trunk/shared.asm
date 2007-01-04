@@ -161,7 +161,7 @@ function(YeditHook):
 	ld	hl,@MenuData
 	call	NumberedMenu
 	ld	a,d
-	cp	1
+	cp	3
 	jr	z,@InstallThreeD
 	cp	2
 	jr	z,@InstallDEQ
@@ -197,9 +197,9 @@ function(YeditHook):
 @MenuData:
 	.db 3 ;nr of menu items
 	.db "GRAPHING MODE",0,0,0,0 ;has to be 17 bytes long
-	.db "3D",0
+	.db "Standard",0
 	.db "Diff Equ",0
-	.db "Standard",0	
+	.db "3D",0	
 
 ;;
 

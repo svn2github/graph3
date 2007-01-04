@@ -22,9 +22,9 @@ function(ThreeD@Strings):
 	.db "SAVE THE PLATYPI",0
 
 @Installed1:
-	.db "Press  Y=  twice  to  enter",0
+	.db "Press Y= twice to select",0
 @Installed2:
-	.db "3D  or  DiffEqu  mode.",0
+	.db "a graphing mode.",0
 
 @Removed1:
 	.db "Graph’",6,"has",6,"been",0
