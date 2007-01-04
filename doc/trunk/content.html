@@ -5,7 +5,7 @@
 <body>
 <p align=center>
 <!--<a href="http://www.detachedsolutions.com/graph3/"><img border=0 width=560 height=40 src="content_files/image001.gif"><br>-->
-<font face="Arial" size="7"><b>Graph3 v2.0</b></font><br>
+<font face="Arial" size="7"><b>Graph3 v1.9</b></font><br>
 <font face="Arial" size="4"><b>by Kirk Meyer & Martin Warmer</b></font><!--</a>--></p>
 
 <h1>Introduction</h1>
@@ -32,6 +32,17 @@ proceed. (If you have other graphing applications installed, for
 example, Inequality or Transformation graphing, you will be
 asked to uninstall them.)</p>
 
+<h1>Compatibility</h1>
+
+<p>Graph3 is not compatible with programs such as Inequality
+Graphing or Transformation Graphing. If
+you have these applications installed, Graph3 will request that you uninstall
+them in order to proceed. Graph3 may be
+installed at the same time as Symbolic and Omnicalc. <i>However</i>, for
+compatibilty reasons, it does not allow you to enter
+their tokens into the Z= equation.</p>
+
+<!--
 <table><tr>
   <td valign=top><b>IMPORTANT:&nbsp;</b></td>
   <td>If you have a previous version installed, upon running the new "Graph3"
@@ -39,6 +50,7 @@ asked to uninstall them.)</p>
   it, then delete it from your calculator. Also delete the corresponding APPVAR.
   This solves connectivity issues with the USB cable and newer versions of TI Connect.</td>
 </tr></table>
+-->
 
 <!-- PAGE BREAK -->
 
@@ -85,6 +97,7 @@ The window screen has the following new variables:
    <li><b>Fldres:</b> Sets the number of columns (1 to 48) that are used to draw a slopefield. This value is only visible when the slopefield is enabled.</li>
 </ul>
 
+<!-- PAGE BREAK -->
 
 <h1>Uninstallation</h1>
 
@@ -95,16 +108,14 @@ should display a message indicating that it has been installed.</p>
  <td valign=top><b>IMPORTANT:&nbsp;</b></td>
  <td>Some applications will offer to uninstall Graph3. This will probably
   work, but it would be better to uninstall it yourself.</td>
-</tr></table>
-
-<!-- PAGE BREAK -->
+</tr></table><br>
 
 <h1>Version History</h1>
 
 <table>
 <tr>
  <td valign=top><b>v1.9&nbsp;</b></td>
- <td>Differential Equation support added, done as a project for the Google Summer of Code.</td>
+ <td>Differential Equation support added by Martin Warmer, done as a project for the Google Summer of Code. License changed to MIT License.</td>
 </tr>	
 <tr>
  <td valign=top><b>v1.1&nbsp;</b></td>
@@ -123,16 +134,6 @@ should display a message indicating that it has been installed.</p>
 </table>
 <br>
 
-<h1>Compatibility</h1>
-
-<p>Graph3 is not compatible with programs such as Inequality
-Graphing or Transformation Graphing. If
-you have these applications installed, Graph3 will request that you uninstall
-them in order to proceed. Graph3 may be
-installed at the same time as Symbolic and Omnicalc. <i>However</i>, for
-compatibilty reasons, it does not allow you to enter
-their tokens into the Z= equation.</p>
-
 <h1>Known Issues</h1>
 
 <h3>3D Mode</h3>
@@ -142,11 +143,10 @@ their tokens into the Z= equation.</p>
 </ul>
 
 <h3>Differential Equation Mode</h3>
-<ul type=disc>
- <li>Recalling Y1 inserts Real(34,0 in the equation instead of the contents of Y1&#39;.</li>
+<ul type=disc> <li>Recalling Y1 inserts Real(34,0 in the equation instead of the contents of Y1&#39;.</li>
  <li>When entering Y1(3) for example, the (3) part is ignored when graphing, but used when calculating the table. This can cause the calculator to never finish calculating the table or display different results for the table that are different from the graph.</li>
- <li>Entering X in an equation will give an error when graphing. But when calculating the table it won't give an error, instead it will behave like you entered T.</li>
-</ul>
+ <li>Entering X in an equation will give an error when graphing, but when calculating the table it won't give an error; instead it will behave like you entered T.</li>
+</ul>
 
 <!-- PAGE BREAK -->
 
@@ -174,13 +174,29 @@ reported bugs so far:</p>
  <li>Benny van Zuiden</li>
 </ul>
 
-<h1>Disclaimer</h1>
+<h1>License</h1>
 
-<p>This program is being provided to you for your use, free of charge.
-You may distribute it freely, but it may not be resold without prior
-written permission of the author. The program has been tested
-extensively. Nevertheless, it may still contain bugs which may
-adversely affect the performance of your calculator. In such a case,
-you agree that you will not hold me responsible for any such damages.</p>
+<p>Copyright (c) 2007 Detached Solutions</p>
+
+<p>Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following
+conditions:</p>
+
+<p>The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.</p>
+
+<p>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.</p>
 
 </body></html>
