@@ -5,15 +5,16 @@
 <body>
 <p align=center>
 <!--<a href="http://www.detachedsolutions.com/graph3/"><img border=0 width=560 height=40 src="content_files/image001.gif"><br>-->
-<font face="Arial" size="7"><b>Graph3 v1.0</b></font><br>
-<font face="Arial" size="4"><b>by Kirk Meyer</b></font><!--</a>--></p>
+<font face="Arial" size="7"><b>Graph3 v2.0</b></font><br>
+<font face="Arial" size="4"><b>by Kirk Meyer & Martin Warmer</b></font><!--</a>--></p>
 
 <h1>Introduction</h1>
 
-<p>Graph3 is a 3D grapher for your TI-83+ or TI-83+ Silver Edition.&nbsp; It is
-faster than the TI-89’s built-in grapher.&nbsp; It features rotation, zooming,
-tracing, and more.&nbsp; It also draws either wireframe or hidden surface
-plots.</p>
+<p>Graph3 adds a 3D grapher and a differential equation grapher to your TI-83+, TI-83+ Silver
+Edition, TI-84+ or TI-84+ Silver Edition.&nbsp;The 3D grapher is faster than the TI-89’s 
+built-in grapher.&nbsp; It features rotation, zooming, tracing, and more.&nbsp; It also 
+draws either wireframe or hidden surface plots.
+The differential equation grapher features the Runge-Kutta method, slope fields and more.</p>
 
 <p><img width=200 height=136 src="content_files/image002.gif">&nbsp;&nbsp;
 <img width=200 height=136 src="content_files/image003.gif">&nbsp;&nbsp;
@@ -43,11 +44,13 @@ asked to uninstall them.)</p>
 
 <h1>Functionality</h1>
 
-<p>To enter 3D mode, press [Y=] twice. You will remain
-in 3D mode until you push a key that exits graph mode (examples: [2nd]QUIT,
+<p>To enter the graphing modes, press [Y=] twice. A menu will popup where you
+can choose to enter Differential Equation or 3D graphing mode. You will remain
+in the selected mode until you push a key that exits graph mode (examples: [2nd]QUIT,
 program editor, memory check, etc). Graphing is very similar to the
 normal function graphing on the 83+, with the following differences:</p>
 
+<h3>3D Mode</h3>
 <ul type=disc>
  <li>There are only two graph styles: wireframe (thin line) and hidden surface
      (filled triangle).</li>
@@ -70,6 +73,19 @@ normal function graphing on the 83+, with the following differences:</p>
      graph from that axis.</li>
 </ul>
 
+<h3>Differential Equation mode</h3>
+The format screen has the following new options:
+<ul type=circle>
+  <li><b>Euler/RungeKutta:</b> Selects the solution method of the differential equation. You can choose between the faster Euler method or the more precise RungeKutta method.</li>
+   <li><b>Field:</b> Controls whether a slopefield of the equation is displayed. When the slopefield is on, graphing multiple equations or a system of equations will give an ERR:INVALID error.</li>
+</ul>
+The window screen has the following new variables:
+<ul type=circle>
+  <li><b>Diftol:</b> Sets the tolerance for the RungeKutta method, which is used to select a stepsize for the RungeKutta algorithm. This variable is only visible when RungeKutta mode is selected.</li>
+   <li><b>Fldres:</b> Sets the number of columns (1 to 48) that are used to draw a slopefield. This value is only visible when the slopefield is enabled.</li>
+</ul>
+
+
 <h1>Uninstallation</h1>
 
 <p>To uninstall, simply run the application again (from the [APPS] menu). It
@@ -86,6 +102,10 @@ should display a message indicating that it has been installed.</p>
 <h1>Version History</h1>
 
 <table>
+<tr>
+ <td valign=top><b>v1.9&nbsp;</b></td>
+ <td>Differential Equation support added, done as a project for the Google Summer of Code.</td>
+</tr>	
 <tr>
  <td valign=top><b>v1.1&nbsp;</b></td>
  <td>The application's name has been changed to "Graph3" to fix compatibility problems with the TI-84. Source code is also included with this version.</td>
@@ -115,10 +135,18 @@ their tokens into the Z= equation.</p>
 
 <h1>Known Issues</h1>
 
+<h3>3D Mode</h3>
 <ul type=disc>
  <li>Cannot use [2nd]Calc to enter abstract coordinates in trace mode</li>
  <li>[2nd]Left and [2nd]Right do nothing when viewing/tracing the graph</li>
 </ul>
+
+<h3>Differential Equation Mode</h3>
+<ul type=disc>
+ <li>Recalling Y1 inserts Real(34,0 in the equation instead of the contents of Y1&#39;.</li>
+ <li>When entering Y1(3) for example, the (3) part is ignored when graphing, but used when calculating the table. This can cause the calculator to never finish calculating the table or display different results for the table that are different from the graph.</li>
+ <li>Entering X in an equation will give an error when graphing. But when calculating the table it won't give an error, instead it will behave like you entered T.</li>
+</ul>
 
 <!-- PAGE BREAK -->
 
