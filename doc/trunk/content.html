@@ -39,7 +39,7 @@ Graphing or Transformation Graphing. If
 you have these applications installed, Graph3 will request that you uninstall
 them in order to proceed. Graph3 may be
 installed at the same time as Symbolic and Omnicalc. <i>However</i>, for
-compatibilty reasons, it does not allow you to enter
+compatibility reasons, it does not allow you to enter
 their tokens into the Z= equation.</p>
 
 <!--
@@ -86,15 +86,50 @@ normal function graphing on the 83+, with the following differences:</p>
 </ul>
 
 <h3>Differential Equation mode</h3>
-The format screen has the following new options:
-<ul type=circle>
-  <li><b>Euler/RungeKutta:</b> Selects the solution method of the differential equation. You can choose between the faster Euler method or the more precise RungeKutta method.</li>
-   <li><b>Field:</b> Controls whether a slopefield of the equation is displayed. When the slopefield is on, graphing multiple equations or a system of equations will give an ERR:INVALID error.</li>
+<h4>Examples</h4>
+<p>To graph the differential equation y'(t)=2t with initial condition y(1)=0 we enter the following:
+<ol>
+  <li> Go to the Y= screen</li>
+  <li> Enter in Y1' the equation "2T"</li>
+  <li> Enter in Yi1 the initial <i>Y</i>-value "0" </li>
+  <li> Go to the Window screen </li>
+  <li> Enter in Tmin the initial <i>t</i>-value "1" </li>
+  <li> Press the graph button </li>
+</ol></p>
+
+<p>To graph the differential equation y''(t)=-y' with initial conditions y(0)=1 and y'(0)=0 we have to do the following:
+<ol>
+  <li> Rewrite the equation as the system of equations y1'=y2 and y2'=-y1 (You may check that y1 is the same as the y function above.) </li>
+  <li> Go to the Y= screen</li>
+  <li> Enter in Y1' the equation "Y2" (Vars, Y-Vars, Y2) </li>
+  <li> Enter in Yi1 the initial <i>Y</i>-value "1" </li>
+  <li> Enter in Y2' the equation "-Y1" (Vars, Y-Vars, Y1) </li>
+  <li> Enter in Yi2 the initial <i>Y</i>-value "0" </li>
+  <li> Go to the Window screen </li>
+  <li> Enter in Tmin the initial <i>t</i>-value "0" </li>
+  <li> Press the graph button </li>
+</ol></p>
+
+<h4>Features</h4>
+The Y= screen works as follows (for Y1 through Y6):
+<ul type=disc>
+  <li><b>Y1':</b> The equation to be graphed </li>
+  <li><b>Yi1:</b> The initial Y-value for the equation. </li>
 </ul>
-The window screen has the following new variables:
-<ul type=circle>
+The window screen has the following variables:
+<ul type=disc>
+  <li><b>Tmin:</b> Sets the initial value of the indepent variable <i>t</i>. This is also the minimum value of <i>t</i> which will be graphed.</li>
+  <li><b>Tmax:</b> Sets the maximum value of the indepent variable <i>t</i> that will be graphed.</li>
+  <li><b>Tstep:</b> Sets the stepsize of the indepent variable <i>t</i>.</li>  
+  <li><b>Xmin/Xmax/Xscl:</b> Sets the visible part of the X-axis.</li>
+  <li><b>Ymin/Ymax/Yscl:</b> Sets the visible part of the Y-axis.</li>
   <li><b>Diftol:</b> Sets the tolerance for the RungeKutta method, which is used to select a stepsize for the RungeKutta algorithm. This variable is only visible when RungeKutta mode is selected.</li>
    <li><b>Fldres:</b> Sets the number of columns (1 to 48) that are used to draw a slopefield. This value is only visible when the slopefield is enabled.</li>
+</ul>
+The format screen has the following new options:
+<ul type=disc>
+  <li><b>Euler/RungeKutta:</b> Selects the solution method of the differential equation. You can choose between the faster Euler method or the more precise RungeKutta method.</li>
+   <li><b>Field:</b> Controls whether a slopefield of the equation is displayed. When the slopefield is on, graphing multiple equations or a system of equations will give an ERR:INVALID error.</li>
 </ul>
 
 <!-- PAGE BREAK -->
